@@ -1,0 +1,24 @@
+---
+title: Effect Deep Dive Overview
+description: Study how the Effect runtime powers cliq—layer composition, managed services, error handling, performance, and prompt design.
+---
+
+This track explains the internals that make cliq deterministic and hackable. Each article traces real code and highlights the Effect patterns behind it.
+
+## Topics
+
+- [Effect fundamentals](./effect-fundamentals) — generators, `Effect.all`, resource scoping, and error channels.
+- [Layers & dependency injection](./layers-and-dependency-injection) — composing the runtime graph in `src/cli.ts`.
+- [Services & managed runtimes](./services-and-managed-runtimes) — structuring services as tags and running them safely.
+- [Error recovery](./error-recovery) — surfacing causes, retry strategies, and safe shutdowns.
+- [Performance & concurrency](./performance-and-concurrency) — streaming, batching, and parallel effects.
+- [Prompt design](./prompt-design) — building the system prompt and tool-aware instructions.
+
+## When to read these
+
+- You are extending cliq to new platforms or adding complex services.
+- You want to understand how Effect layers enforce dependency boundaries.
+- You are optimising streaming performance or investigating failure modes.
+
+Prefer the [Build Series](/docs/build-series/overview) if you need hands-on labs, or the [Mechanics track](/docs/mechanics/overview) for subsystem walkthroughs.
+

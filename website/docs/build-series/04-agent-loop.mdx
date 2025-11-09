@@ -1,0 +1,470 @@
+---
+id: 04-agent-loop
+title: "04 → Agent loop"
+description: Build the interactive chat interface where you talk with the AI.
+---
+
+## Overview
+
+### What you'll build
+
+You're building the interactive loop that makes Cliq feel like a real conversation. Type a message, press Enter, see the AI respond—just like ChatGPT, but in your terminal. You'll also add slash commands (`/model`, `/help`, `/exit`) that flow through a shared `SlashCommandHandler`, so you can extend commands later without rewriting the loop.
+
+This is where everything comes together. The runtime (step 1), configuration (step 2), and tools (step 3) were infrastructure. Now you're building the user-facing experience—the part people actually interact with.
+
+### Why it matters
+
+The chat loop is the heart of your AI agent. It handles:
+- Reading user input (with proper terminal handling)
+- Sending messages to the AI
+- Displaying responses
+- Managing resources (cleanup when the program exits)
+- Error recovery (network failures shouldn't crash the session)
+
+This step teaches important patterns you'll use everywhere: resource management with `acquireUseRelease` and safe loops that don't crash after thousands of messages.
+
+### Big picture
+
+You've built the foundation (steps 1-3). After this step, you'll have a working agent that can chat and use tools. The remaining steps (5-11) add polish: streaming responses, more tools, prettier output, and session persistence.
+
+Think of this as the "minimum working agent"—after step 4, everything works end-to-end. You'll be able to chat with your AI and watch it read files.
+
+<details>
+<summary><strong>Core concepts (Effect-TS)</strong></summary>
+
+### Readline: How Terminal Input Works
+
+When you type in a terminal, something needs to:
+1. Listen for keystrokes
+2. Handle special keys (backspace, arrow keys, Enter)
+3. Show what you're typing
+4. Signal when a line is complete
+
+Bun ships the Node-compatible `readline` module used here. You create a readline interface, attach listeners, and get completed lines of input. If you port the project to Node.js, the same API applies, but Cliq's reference runtime targets Bun exclusively.
+
+The tricky part: readline interfaces hold resources (file handles, listeners). If you forget to clean them up, your program keeps listening even after it should exit. You use Effect's `acquireUseRelease` pattern to guarantee cleanup.
+
+### Loops That Don't Crash: Tail Recursion
+
+Here's how NOT to write a chat loop:
+
+```typescript
+// BAD: This will crash after thousands of messages
+async function chatLoop() {
+  const input = await readInput();
+  await sendToAI(input);
+  await chatLoop(); // Each call adds to the call stack
+}
+```
+
+Each recursive call adds a stack frame. After enough messages, you hit the stack limit and crash with "Maximum call stack exceeded."
+
+**Tail recursion** fixes this. A tail-recursive function is one where the recursive call is the last thing that happens. Effect can optimize this into a loop with no stack growth:
+
+```typescript
+// GOOD: Runs forever without stack issues
+const chatLoop = (state) =>
+  processInput(state).pipe(
+    Effect.flatMap((keepGoing) =>
+      keepGoing
+        ? chatLoop(state) // Tail position - optimized to a loop
+        : Effect.succeed(undefined)
+    )
+  );
+```
+
+### acquireUseRelease: Safe Resource Management
+
+Traditional resource cleanup:
+
+```typescript
+const rl = createReadline();
+try {
+  await doStuff(rl);
+} finally {
+  rl.close(); // Always runs, even if doStuff throws
+}
+```
+
+Effect's approach:
+
+```typescript
+Effect.acquireUseRelease(
+  createReadline,          // Acquire resource
+  (rl) => doStuff(rl),    // Use resource
+  (rl) => cleanup(rl),    // Always cleanup, even on errors
+);
+```
+
+Benefits:
+- **Composable**: Nest multiple resources easily
+- **Interrupt-safe**: If user cancels, cleanup still runs
+- **Type-safe**: Compiler ensures you provide cleanup
+
+</details>
+
+## Implementation
+
+### Step 1: Install Vercel AI SDK
+
+You need the AI SDK to communicate with AI providers:
+
+```bash
+bun add ai @ai-sdk/anthropic @ai-sdk/openai @ai-sdk/google
+```
+
+### Step 2: Create the Vercel AI Service
+
+Wrap the Vercel AI SDK in an Effect service:
+
+```typescript title="src/services/VercelAI.ts"
+import { Effect, Layer, Context } from "effect";
+import { streamText } from "ai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { ConfigService } from "./ConfigService";
+
+export class VercelAI extends Context.Tag("VercelAI")<
+  VercelAI,
+  {
+    readonly streamChat: (params: {
+      messages: Array<any>;
+      tools: Record<string, any>;
+      maxSteps?: number;
+      temperature?: number;
+    }) => Effect.Effect<any>;
+  }
+>() {}
+
+export const layer = Layer.effect(
+  VercelAI,
+  Effect.gen(function* () {
+    const configService = yield* ConfigService;
+
+    return {
+      streamChat: (params) =>
+        Effect.gen(function* () {
+          const config = yield* configService.load;
+
+          // Select the right provider
+          const model = (() => {
+            switch (config.provider) {
+              case "anthropic":
+            return createAnthropic()(config.model);
+              case "openai":
+            return createOpenAI()(config.model);
+              case "google":
+            return createGoogleGenerativeAI()(config.model);
+            }
+          })();
+
+          // Stream the chat
+          return streamText({
+            model,
+            messages: params.messages,
+            tools: params.tools,
+            maxSteps: params.maxSteps || config.maxSteps,
+            temperature: params.temperature || config.temperature,
+          });
+        }),
+    };
+  }),
+);
+```
+
+**What's happening here:**
+
+- The layer wraps the Vercel AI SDK in an Effect service
+- `streamChat` selects the right provider based on config
+- It calls `streamText`, which handles the streaming and tool calling
+
+### Step 3: Create Message Service
+
+Build a service that manages sending messages and handling responses:
+
+```typescript title="src/chat/MessageService.ts"
+import { Effect, Layer, Context, Console } from "effect";
+import { VercelAI } from "../services/VercelAI";
+import { ToolRegistry } from "../services/ToolRegistry";
+import { ConfigService } from "../services/ConfigService";
+
+export class MessageService extends Context.Tag("MessageService")<
+  MessageService,
+  {
+    readonly sendMessage: (userMessage: string) => Effect.Effect<void>;
+  }
+>() {}
+
+export const layer = Layer.effect(
+  MessageService,
+  Effect.gen(function* () {
+    const vercelAI = yield* VercelAI;
+    const toolRegistry = yield* ToolRegistry;
+    const configService = yield* ConfigService;
+
+    return {
+      sendMessage: (userMessage: string) =>
+        Effect.gen(function* () {
+          const config = yield* configService.load;
+          const tools = yield* toolRegistry.tools;
+
+          // Create message history
+          const messages = [
+            {
+              role: "system",
+              content: "You are a helpful AI coding assistant. Use tools to help answer questions.",
+            },
+            {
+              role: "user",
+              content: userMessage,
+            },
+          ];
+
+          yield* Console.log("\nProcessing...\n");
+
+          // Stream the response
+          const result = yield* vercelAI.streamChat({
+            messages,
+            tools,
+            maxSteps: config.maxSteps,
+            temperature: config.temperature,
+          });
+
+          // Wait for streaming to complete and collect text
+          const { text } = yield* Effect.promise(() => result);
+
+          // Display the response
+          yield* Console.log(`\nAssistant: ${text}\n`);
+        }),
+    };
+  }),
+);
+```
+
+**What's happening here:**
+
+- `sendMessage` takes user input and sends it to the AI
+- The service assembles a message history (system prompt + user message)
+- It passes the tools so the AI can use them
+- It waits for the streaming to complete and displays the result
+
+### Step 4: Create Readline Helpers
+
+Build helpers for terminal input:
+
+```typescript title="src/chat/ReadlineIO.ts"
+import { Effect } from "effect";
+import * as readline from "node:readline";
+
+export const createReadlineInterface = () => {
+  return readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+};
+
+export const promptForInput = (
+  rl: readline.Interface,
+  prompt: string,
+): Effect.Effect<string> =>
+  Effect.async<string>((resume) => {
+    rl.question(prompt, (answer) => {
+      resume(Effect.succeed(answer.trim()));
+    });
+  });
+
+export const closeReadline = (rl: readline.Interface): Effect.Effect<void> =>
+  Effect.sync(() => rl.close());
+```
+
+**What's happening here:**
+
+- `createReadlineInterface` creates the terminal input handler
+- `promptForInput` asks a question and waits for Enter
+- `closeReadline` cleans up the readline interface
+- Everything is wrapped in Effect for composability
+
+### Step 5: Build the Chat Loop
+
+Now create the main loop (and route slash commands through `src/chat/SlashCommandHandler.ts`):
+
+```typescript title="src/chat/ChatProgram.ts"
+import { Effect, Console } from "effect";
+import { MessageService } from "./MessageService";
+import * as ReadlineIO from "./ReadlineIO";
+import { handleSlashCommand, isSlashCommand } from "./SlashCommandHandler";
+
+// Check if user wants to exit
+const shouldExit = (input: string): boolean => {
+  const lower = input.toLowerCase();
+  return lower === "exit" || lower === "quit" || lower === "bye";
+};
+
+// Process one input and return whether to continue
+const processInput = (
+  messageService: MessageService,
+  rl: ReturnType<typeof ReadlineIO.createReadlineInterface>,
+): Effect.Effect<boolean> =>
+  Effect.gen(function* () {
+    // Read input
+    const input = yield* ReadlineIO.promptForInput(rl, "\nYou: ");
+
+    // Handle empty input
+    if (!input) {
+      return true; // Continue loop
+    }
+
+    // Slash commands like /model, /help, /exit
+    if (isSlashCommand(input)) {
+      const shouldExit = yield* handleSlashCommand(rl, input);
+      if (shouldExit) {
+        yield* Console.log("\nGoodbye!\n");
+        return false;
+      }
+      return true;
+    }
+
+    // Check for plain-text exit
+    if (shouldExit(input)) {
+      yield* Console.log("\nGoodbye!\n");
+      return false; // Exit loop
+    }
+
+    // Send to AI
+    yield* messageService.sendMessage(input).pipe(
+      Effect.catchAll((error) =>
+        Console.error(`\nError: ${error}\n`).pipe(Effect.as(true))
+      )
+    );
+
+    return true; // Continue loop
+  });
+
+// Tail-recursive loop
+const runLoop = (
+  messageService: MessageService,
+  rl: ReturnType<typeof ReadlineIO.createReadlineInterface>,
+): Effect.Effect<void> =>
+  processInput(messageService, rl).pipe(
+    Effect.flatMap((keepGoing) =>
+      keepGoing
+        ? runLoop(messageService, rl) // Recurse (tail position)
+        : Effect.succeed(undefined) // Exit
+    )
+  );
+
+// Main chat program with resource management
+export const ChatProgram = Effect.gen(function* () {
+    const messageService = yield* MessageService;
+
+  // Display welcome message
+  yield* Console.log("\n=================================");
+  yield* Console.log("  Cliq - AI Coding Assistant");
+  yield* Console.log("=================================");
+  yield* Console.log("Type your message or 'exit' to quit\n");
+
+  // Manage readline lifecycle
+    yield* Effect.acquireUseRelease(
+    Effect.sync(() => ReadlineIO.createReadlineInterface()),
+    (rl) => runLoop(messageService, rl),
+    (rl) => ReadlineIO.closeReadline(rl)
+    );
+  });
+```
+
+**What's happening here:**
+
+- `processInput` handles one interaction and returns `true` (continue) or `false` (exit)
+- `runLoop` recursively calls itself in tail position (no stack growth)
+- `ChatProgram` uses `acquireUseRelease` to guarantee readline cleanup
+- Slash commands are centralized in `SlashCommandHandler.handle`, keeping the loop focused on I/O
+- Errors don't crash the loop—they're caught and displayed
+
+### Step 6: Update Main Entry Point
+
+Update `src/cli.ts` to run the chat program:
+
+```typescript title="src/cli.ts"
+import { Effect, Layer } from "effect";
+import { BunContext, BunRuntime } from "@effect/platform-bun";
+import { FileKeyValueStore } from "./persistence/FileKeyValueStore";
+import { ConfigService } from "./services/ConfigService";
+import { PathValidation } from "./services/PathValidation";
+import { FileTools } from "./tools/FileTools";
+import { ToolRegistry } from "./services/ToolRegistry";
+import { VercelAI } from "./services/VercelAI";
+import { MessageService } from "./chat/MessageService";
+import { ChatProgram } from "./chat/ChatProgram";
+
+// Compose all layers
+const MainLayer = Layer.mergeAll(
+  BunContext.layer,
+  FileKeyValueStore.layer,
+  ConfigService.layer,
+  PathValidation.layer,
+  FileTools.layer,
+  ToolRegistry.layer,
+  VercelAI.layer,
+  MessageService.layer,
+);
+
+// Run the chat program
+ChatProgram.pipe(
+  Effect.provide(MainLayer),
+  Effect.tapErrorCause(Effect.logError),
+  BunRuntime.runMain,
+);
+```
+
+### Step 7: Run It!
+
+```bash
+bun run src/cli.ts
+```
+
+**Expected experience:**
+```
+=================================
+  Cliq - AI Coding Assistant
+=================================
+Type your message or 'exit' to quit
+
+You: hello
+
+Processing...
+```
+
+---
+
+<details>
+<summary><strong>Common Issues</strong></summary>
+
+| Problem | Likely Cause | Fix |
+|---------|--------------|-----|
+| Slash command prints “Unknown command” | `SlashCommandHandler` layer not merged into `MainLayer` | Ensure `SlashCommandHandler.layer` is merged before providing `MainLayer` |
+| `/model` runs but provider never changes | `ConfigService.layer` missing or no API key available | Match the layer stack from [02 — Provider Configuration](/docs/build-series/02-provider-config) and double-check `.env` |
+| Loop exits immediately after command | `SlashCommandHandler.handle` returned "exit" | Return `undefined` unless you intentionally end the session |
+| Terminal echoes control characters | Running without Bun's readline bindings | Use Bun ≥ 1.1 and `ReadlineIO.createReadlineInterface()` |
+
+</details>
+
+---
+
+<details>
+<summary><strong>Connections</strong></summary>
+
+**Builds on:**
+- [02 — Provider Configuration](/docs/build-series/02-provider-config) — `/model` updates `ConfigService`
+- [03 — First Tool](/docs/build-series/03-first-tool-readfile) — `MessageService` exposes tool calls
+
+**Sets up:**
+- [05 — Streaming Output](/docs/build-series/05-streaming) — Enhances the UI while reusing this loop
+- [09 — Session Persistence](/docs/build-series/09-session-persistence) — Persists messages created here
+
+**Related code:**
+- `src/chat/MessageService.ts`
+- `src/chat/SlashCommandHandler.ts`
+- `src/services/ToolRegistry.ts`
+
+</details>

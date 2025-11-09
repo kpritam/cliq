@@ -1,0 +1,114 @@
+---
+title: Effect fundamentals
+description: The Effect patterns that keep cliq predictable—generators, dependency injection, and lifting promises.
+---
+
+Effect-TS underpins every subsystem in cliq. Understanding the core idioms makes the rest of the deep dive easier.
+
+## Sequencing async logic with `Effect.gen`
+
+```typescript title="src/chat/MessageService.ts"
+const handleChatStream = (
+  messages: CoreMessage[],
+  tools: ToolSet,
+  config: { maxSteps: number; temperature: number },
+  vercelAI: VercelAIService,
+) =>
+  Effect.gen(function* () {
+    yield* displayProcessing();
+
+    const result = yield* vercelAI.streamChat({
+      messages,
+      tools,
+      maxSteps: config.maxSteps,
+      temperature: config.temperature,
+      onStepFinish: (step) => {
+        if (step.toolCalls?.length) presentToolCalls(step.toolCalls);
+        if (step.toolResults?.length) presentToolResults(step.toolResults);
+      },
+    });
+
+    yield* displayAssistantHeader();
+    const assistantText = yield* streamTextToConsole(result.textStream);
+    yield* displayComplete();
+
+    return assistantText;
+  });
+```
+
+- Each `yield*` unwraps an Effect, keeping asynchronous code linear.
+- Failures propagate automatically—no manual `try/catch` blocks or dangling promises.
+
+## Lifting callback/async APIs
+
+```typescript title="src/chat/MessageService.ts"
+const streamTextToConsole = (textStream: AsyncIterable<string>) =>
+  Effect.promise(async () => {
+    let text = "";
+    for await (const textPart of textStream) {
+      text += textPart;
+    }
+    const rendered = renderMarkdownToTerminal(text, 76);
+    console.log(UI.indent(rendered, 2));
+    return text;
+  });
+```
+
+- `Effect.promise` bridges promise-based APIs into the Effect runtime.
+- Downstream code decides when and how to execute the effect (provide dependencies, retry, race, etc.).
+
+## Dependency-aware effects
+
+```typescript title="src/chat/MessageService.ts"
+const sendMessage = (input: string, sessionId: string) =>
+  Effect.gen(function* () {
+    const config = yield* configService.load;
+    const tools = yield* toolRegistry.tools;
+
+    const userMessage = createUserMessage(input, sessionId);
+    yield* sessionStore.saveMessage(userMessage);
+
+    const history = yield* sessionStore.listMessages(sessionId);
+    const systemPrompt = buildSystemPrompt({
+      cwd: process.cwd(),
+      provider: config.provider,
+      model: config.model,
+      maxSteps: config.maxSteps ?? 10,
+    });
+
+    const messages = buildMessages(history, systemPrompt);
+
+    const assistantText = yield* handleChatStream(
+      messages,
+      tools,
+      {
+        maxSteps: config.maxSteps ?? 10,
+        temperature: config.temperature,
+      },
+      vercelAI,
+    );
+
+    const trimmed = assistantText.trim();
+    if (trimmed.length > 0) {
+      const assistantMessage = createAssistantMessage(trimmed, sessionId);
+      yield* sessionStore.saveMessage(assistantMessage);
+    }
+  });
+```
+
+- Effects request dependencies explicitly (`configService`, `toolRegistry`, `sessionStore`).
+- The compiler enforces that the surrounding layer provides those services.
+- Swapping a dependency (e.g., a mocked tool registry) is as simple as providing a different layer.
+
+## Tips
+
+- Hover over an Effect in your editor to see the inferred environment and error channel—it documents the contract automatically.
+- Combine effects with `Effect.all` or `Effect.forEach` to run operations in parallel when they do not depend on each other.
+- Treat raw promises as implementation details; wrap them in Effects as soon as they cross a boundary.
+
+## Source
+
+- `src/chat/MessageService.ts`
+- `src/chat/ToolPresenter.ts`
+- `src/chat/systemPrompt.ts`
+

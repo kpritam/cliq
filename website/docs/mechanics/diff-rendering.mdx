@@ -1,0 +1,113 @@
+---
+title: Diff rendering
+description: How cliq computes diffs, tracks change stats, and renders them in the terminal.
+---
+
+## Pipeline overview
+
+1. `EditTools` or `FileTools` compute diffs and statistics with `diff`.
+2. Tool responses include `diff` and `stats` objects.
+3. `ToolResultPresenter` formats the diff block and change metrics.
+
+## Diff utilities
+
+```typescript title="src/utils/diff.ts"
+// Generate unified diff format
+export const computeDiff = (
+  original: string,
+  updated: string,
+  filePath: string,
+): string => Diff.createPatch(filePath, original, updated);
+
+// Calculate change statistics
+export const computeStats = (original: string, updated: string): DiffStats => {
+  const parts = Diff.diffLines(original, updated);
+  let added = 0;
+  let removed = 0;
+
+  for (const part of parts) {
+    if (part.added) added += part.count ?? 0;
+    else if (part.removed) removed += part.count ?? 0;
+  }
+
+  return {
+    linesAdded: added,
+    linesRemoved: removed,
+    totalChanges: added + removed,
+  };
+};
+```
+
+- `computeDiff` produces a unified diff string consumed by the terminal presenter.
+- `DiffStats` summarises change size for gating logic and UI display.
+
+## Tool responses
+
+```typescript title="src/tools/EditTools.ts"
+const stats = computeStats(content, updated);
+const diff = computeDiff(content, updated, filePath);
+
+return {
+  success: true,
+  path: relPath,
+  size: updated.length,
+  diff,
+  stats,
+  validation,
+};
+```
+
+- Preview responses reuse the same diff + stats but set `success: false` and include a recommendation.
+- `FileTools.writeFile` follows the same pattern, returning optional diff/stats when changes occur.
+
+## Terminal presentation
+
+```typescript title="src/chat/ui/ToolResultPresenter.ts"
+export const displayEditDiff = (result: ToolResult, toolName: string): void => {
+  if (toolName !== "editFile" || !result?.diff) return;
+
+  console.log(
+    "\n" +
+      UI.Colors.BORDER("  ") +
+      UI.Colors.TOOL(`${UI.Icons.CHANGES} `) +
+      UI.Colors.MUTED("Changes"),
+  );
+  renderDiffBlock(result.diff);
+  displayChangeStats(result.stats as DiffStats);
+};
+```
+
+- `renderDiffBlock` applies syntax colouring and indentation to the unified diff.
+- `displayChangeStats` prints `+added`, `-removed`, and total change counts.
+- Similar helpers exist for `writeFile` previews and tool validations.
+
+## Rendering helper
+
+```typescript title="src/chat/ui/presenters/DiffRenderer.ts"
+export const renderDiffBlock = (diff: string) => {
+  const lines = diff.split("\n");
+  for (const line of lines) {
+    if (line.startsWith("+")) console.log(UI.Colors.DIFF_ADD(`  ${line}`));
+    else if (line.startsWith("-"))
+      console.log(UI.Colors.DIFF_REMOVE(`  ${line}`));
+    else console.log(UI.Colors.DIFF_CONTEXT(`  ${line}`));
+  }
+};
+```
+
+The renderer colours additions/removals and keeps context lines muted so the diff stays legible in the terminal.
+
+## Usage tips
+
+- Use previews (`previewEdit`) to show diffs without touching the filesystem.
+- Watch the stats to decide whether to prompt the assistant for confirmation.
+- Custom tools can reuse `computeDiff`/`computeStats` to provide consistent UI.
+
+## Source
+
+- `src/utils/diff.ts`
+- `src/tools/EditTools.ts`
+- `src/tools/FileTools.ts`
+- `src/chat/ui/presenters/DiffRenderer.ts`
+- `src/chat/ui/ToolResultPresenter.ts`
+

@@ -1,0 +1,50 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+
+  <defs>
+
+    <linearGradient id="cursorGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+
+    </linearGradient>
+
+  </defs>
+
+  
+
+  <!-- Transparent background -->
+
+  <rect width="512" height="512" fill="none"/>
+
+  
+
+  <!-- Centered logo with padding -->
+
+  <g transform="translate(256, 256)">
+
+    <!-- Heavy arrow prompt - much larger size -->
+
+    <path d="M -180 -120 L -30 0 L -180 120" 
+
+          stroke="#10B981" 
+
+          stroke-width="65" 
+
+          fill="none" 
+
+          stroke-linecap="round"
+
+          stroke-linejoin="round"/>
+
+    
+
+    <!-- Heavy cursor - much larger size -->
+
+    <rect x="30" y="-140" width="130" height="280" rx="20" fill="url(#cursorGrad)"/>
+
+  </g>
+
+</svg>
+

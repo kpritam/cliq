@@ -1,0 +1,235 @@
+---
+id: 06-search-glob-grep
+title: "06 → Search with glob and ripgrep"
+description: Add glob and ripgrep tools so the assistant can explore the workspace.
+---
+
+## Overview
+
+### What you'll build
+
+You're giving the assistant the ability to discover files and search through their contents. The `glob` tool scans file paths, while `grep` wraps ripgrep so the agent can find matches with context—all without leaving the project sandbox enforced by `PathValidation`.
+
+### Why it matters
+
+- Glob lets the agent list candidates (e.g., “find all `*.mdx` docs”).
+- Grep surfaces specific matches—perfect for “where is `ConfigService` mentioned?”
+- Tight validation protects your filesystem (no wandering into `/etc` or following symlinks out of the repo).
+
+### Big picture
+
+This step builds on the file-reading foundation from [Step 03](/docs/build-series/03-first-tool-readfile). Later steps (07/08) rely on search results to preview edits and render markdown, so getting safe, predictable search is critical now.
+
+<details>
+<summary><strong>Core concepts (Effect-TS)</strong></summary>
+
+### Validating Working Directories
+Always resolve user-provided paths through `PathValidation.ensureWithinCwd`. It normalizes absolute/relative inputs and fails if the resolved path tries to escape the project root.
+
+### Default Excludes
+Ripgrep accepts `--glob` patterns to ignore expensive folders. Provide a sensible default (e.g., `node_modules`, `.git`, build artifacts) and let callers add more. This keeps searches fast and avoids scanning binaries.
+
+### Streaming Ripgrep Output
+Ripgrep’s `--json` flag produces machine-readable events. Pipe them through a parser (`parseGrepOutput`) to accumulate matches, context lines, and file counts.
+</details>
+
+---
+
+
+## Implementation
+## Implementation
+
+### Step 1: Glob safely within the project root
+
+```typescript title="src/tools/SearchTools.ts"
+const glob = ({
+  pattern,
+  cwd,
+  dot = false,
+  absolute = false,
+  onlyFiles = true,
+  maxResults = 1000,
+}: Schema.Schema.Type<typeof GlobParameters>) =>
+  Effect.gen(function* () {
+    const pathValidation = yield* PathValidation;
+    const workingDir = yield* pathValidation.ensureWithinCwd(cwd ?? ".");
+
+    const globber = new Bun.Glob(pattern);
+    const iterator = globber.scan({
+      cwd: workingDir,
+      dot,
+      absolute,
+      onlyFiles,
+      followSymlinks: false,
+      throwErrorOnBrokenSymlink: false,
+    });
+
+    const matches: string[] = [];
+    for await (const val of iterator) {
+      matches.push(val as string);
+      if (matches.length >= maxResults) break;
+    }
+
+    matches.sort();
+
+    return {
+      pattern,
+      matches,
+      count: matches.length,
+      truncated: matches.length >= maxResults,
+      cwd: absolute ? workingDir : pathValidation.relativePath(workingDir),
+    } as const;
+  });
+```
+
+### Step 2: Build ripgrep arguments with sane defaults
+
+```typescript title="src/tools/SearchTools.ts"
+const DEFAULT_EXCLUDES = [
+  "**/node_modules/**",
+  "**/.git/**",
+  "**/dist/**",
+  "**/.turbo/**",
+];
+
+const buildGrepArgs = (
+  pattern: string,
+  isRegex: boolean,
+  includePatterns: readonly string[] | undefined,
+  excludePatterns: readonly string[] | undefined,
+  contextLines: number,
+  maxResults: number,
+): string[] => {
+  const args = [
+    "--json",
+    "--max-count", maxResults.toString(),
+    "--context", contextLines.toString(),
+    "--with-filename",
+    "--line-number",
+  ];
+
+  if (!isRegex) args.push("--fixed-strings");
+
+  for (const exclusion of excludePatterns ?? DEFAULT_EXCLUDES) {
+    args.push("--glob", `!${exclusion}`);
+  }
+
+  for (const inclusion of includePatterns ?? []) {
+    args.push("--glob", inclusion);
+  }
+
+  args.push(pattern, ".");
+  return args;
+};
+```
+
+### Step 3: Execute ripgrep through the command runtime
+
+```typescript title="src/tools/SearchTools.ts"
+const grep = ({
+  pattern,
+  isRegex = false,
+  includePatterns,
+  excludePatterns,
+  contextLines = 2,
+  maxResults = 100,
+  searchPath,
+}: Schema.Schema.Type<typeof GrepParameters>) =>
+  Effect.gen(function* () {
+    if (pattern.trim().length === 0) {
+      return yield* Effect.fail(new EmptyPattern({ pattern }));
+    }
+
+    const pathValidation = yield* PathValidation;
+    const cwd = yield* pathValidation.ensureWithinCwd(searchPath ?? ".");
+
+    const args = buildGrepArgs(
+      pattern,
+      isRegex,
+      includePatterns,
+      excludePatterns,
+      contextLines,
+      maxResults,
+    );
+
+    const output = yield* runRgString(args, cwd).pipe(Effect.orDie);
+    const { matches, filesSearched } = parseGrepOutput(
+      output,
+      path,
+      cwd,
+      contextLines,
+    );
+
+    return {
+      pattern,
+      isRegex,
+      filesSearched,
+      matches,
+      truncated: matches.length >= maxResults,
+    } as const;
+  });
+```
+
+Remember to provide `PathValidation.layer` when constructing the managed runtime in `ToolRegistry` (mirrors the dependency you added for `FileTools`).
+
+---
+
+<details>
+<summary><strong>Security & Performance Notes</strong></summary>
+
+
+- Enforcing `ensureWithinCwd` prevents path traversal and keeps searches local to the project.
+- Limiting `maxResults` protects against massive result sets (adjust in the schema if you need bulk results).
+- Add extra excludes for large binary directories (`**/vendor/**`, `**/coverage/**`) if your repo needs it.
+
+---
+
+</details>
+
+<details>
+<summary><strong>Testing & Validation</strong></summary>
+
+
+1. Run `glob` for `src/**/*.ts` and confirm results stay inside the repo.
+2. Run `grep` for a rare token and verify `filesSearched` increments correctly.
+3. Try an empty pattern—`EmptyPattern` should fail with a helpful error.
+4. Pass `../..` as `searchPath`; expect a failure from `PathValidation` rather than a filesystem escape.
+
+---
+
+</details>
+
+<details>
+<summary><strong>Common Issues</strong></summary>
+
+
+| Problem | Likely Cause | Fix |
+|---------|--------------|-----|
+| Glob returns absolute paths unexpectedly | `absolute: true` used without UI normalization | Use `pathValidation.relativePath` before returning to the assistant |
+| Ripgrep scans binary folders | `DEFAULT_EXCLUDES` missing build/vendor dirs | Add repo-specific excludes when configuring `SearchTools` |
+| `runRgString` throws “command not found” | ripgrep not installed in Bun runtime | Install `rg` on your system or bundle it alongside the CLI |
+| Path traversal allowed | Forgot to provide `PathValidation.layer` | Ensure ToolRegistry runtime composes `PathValidation.layer` before `SearchTools.layer` |
+
+---
+
+</details>
+
+<details>
+<summary><strong>Connections</strong></summary>
+
+
+**Builds on:**
+- [03 — First Tool](/docs/build-series/03-first-tool-readfile) — Reuses `PathValidation`
+
+**Sets up:**
+- [07 — Edit with Preview and Diff Gating](/docs/build-series/07-edit-preview-diff-gating) — Uses search results to focus edits
+- [08 — Markdown Rendering](/docs/build-series/08-markdown-rendering) — Often triggered after `glob`
+
+**Related code:**
+- `src/tools/SearchTools.ts`
+- `src/tools/search/GrepParser.ts`
+- `src/adapters/SearchToolAdapters.ts`
+- `src/services/ToolRegistry.ts`
+
+</details>
+

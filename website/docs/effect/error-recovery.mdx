@@ -1,0 +1,99 @@
+---
+title: Error recovery
+description: Keep sessions consistent, surface detailed failure causes, and shut down cleanly.
+---
+
+Even validated tools can fail—network hiccups, missing files, invalid parameters. Cliq treats recovery as part of the happy path.
+
+## Persist before remote calls
+
+```typescript title="src/chat/MessageService.ts"
+const sendMessage = (input: string, sessionId: string) =>
+  Effect.gen(function* () {
+    const config = yield* configService.load;
+    const tools = yield* toolRegistry.tools;
+
+    const userMessage = createUserMessage(input, sessionId);
+    yield* sessionStore.saveMessage(userMessage);
+
+    const history = yield* sessionStore.listMessages(sessionId);
+    const systemPrompt = buildSystemPrompt({
+      cwd: process.cwd(),
+      provider: config.provider,
+      model: config.model,
+      maxSteps: config.maxSteps ?? 10,
+    });
+
+    const messages = buildMessages(history, systemPrompt);
+
+    const assistantText = yield* handleChatStream(
+      messages,
+      tools,
+      {
+        maxSteps: config.maxSteps ?? 10,
+        temperature: config.temperature,
+      },
+      vercelAI,
+    );
+
+    const trimmed = assistantText.trim();
+    if (trimmed.length > 0) {
+      const assistantMessage = createAssistantMessage(trimmed, sessionId);
+      yield* sessionStore.saveMessage(assistantMessage);
+    }
+  });
+```
+
+- User input is stored before making remote calls, so retries never lose context.
+- Assistant output is persisted only after streaming succeeds.
+
+## Rich cause reporting
+
+```typescript title="src/chat/ChatProgram.ts"
+return yield* messageService.sendMessage(input, sessionId).pipe(
+  Effect.as(true),
+  Effect.catchAllCause((cause) =>
+    Console.error(
+      "\n" +
+        UI.Colors.BORDER("╭─ ") +
+        UI.Colors.ERROR(`${UI.Icons.ERROR} Error`) +
+        " " +
+        UI.Colors.BORDER("─".repeat(65)) +
+        "\n" +
+        UI.Colors.BORDER("│ ") +
+        UI.Colors.ERROR(Cause.pretty(cause)) +
+        "\n" +
+        UI.Colors.BORDER(`╰${"─".repeat(78)}`),
+    ).pipe(Effect.as(false)),
+  ),
+);
+```
+
+- `Cause.pretty` prints nested causes, defects, and retry hints.
+- Wrap specific branches with `Effect.catchTags` to implement targeted retries.
+
+## Clean resource handling
+
+```typescript title="src/chat/ChatProgram.ts"
+yield* Effect.acquireUseRelease(
+  acquireReadline,
+  ({ rl }) => runLoop(sessionId, messageService, rl),
+  (resource, _exit) => releaseReadline(resource),
+);
+```
+
+- `Effect.acquireUseRelease` closes the readline interface whether the loop succeeds, fails, or is interrupted (e.g., `Ctrl+C`).
+- Resource cleanup stays declarative and side-effect free.
+
+## Tips
+
+- Log causes during development; hide them behind verbose flags in production environments.
+- Wrap risky tool operations with `Effect.retry` or `Effect.catchAll` if you expect transient failures.
+- Prefer returning structured errors (custom tags) so downstream recovery logic can branch precisely.
+
+## Source
+
+- `src/chat/MessageService.ts`
+- `src/chat/ChatProgram.ts`
+- `src/persistence/SessionStore.ts`
+

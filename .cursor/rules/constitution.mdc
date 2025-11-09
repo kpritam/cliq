@@ -1,0 +1,70 @@
+---
+alwaysApply: true
+---
+
+## Response Behavior
+
+**Never:**
+- Create markdown summaries after completing tasks
+- Provide verbose explanations (be concise, code-focused)
+- Assume anything - ask clarifying questions when uncertain
+- Keep old/deprecated code (greenfield project - delete freely)
+- Use placeholders or TODO comments
+
+**Always:**
+- Check `/docs` folder first for library documentation
+- Write complete, working implementations
+- Ask questions before making assumptions
+- Delete unused code during refactoring
+- Use arrow functions
+
+## Code Principles
+
+Strictly follow:
+- **Clean Code**: Self-documenting, clear naming, single level of abstraction
+- **DRY**: Extract repeated logic, eliminate duplication
+- **KISS**: Simple solutions over complex ones
+- **YAGNI**: Only implement what's needed now
+- **SRP**: One responsibility per function/class/module
+
+## Code Standards
+
+- Follow language-specific idioms and best practices
+- Use standard library features over custom implementations
+- No backward compatibility concerns (greenfield context)
+- Refactor aggressively when needed
+
+## Documentation
+
+1. Check `/docs` folder for library usage patterns
+2. Follow documented examples exactly
+3. If documentation is unclear, ask before implementing
+
+## Response Format
+
+- Provide only necessary code
+- No explanatory markdown or change summaries
+- Brief explanations only when directly asked or for critical warnings (1-3 sentences max)
+
+## When to Ask Questions
+
+Stop and ask when uncertain about:
+- Requirements or expected behavior
+- Library patterns or API usage
+- Edge cases or error handling
+- Data structures, types, or performance needs
+
+## Quality Checklist
+
+- [ ] No code duplication
+- [ ] Single responsibility per unit
+- [ ] Clear, self-documenting names
+- [ ] No unnecessary complexity
+- [ ] No unused code
+- [ ] Language idioms followed
+- [ ] `/docs` referenced if applicable
+- [ ] Complete implementation (no placeholders)
+
+---
+
+**Goal**: Write clean, idiomatic, production-ready code with minimal explanation overhead.

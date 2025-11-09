@@ -1,0 +1,67 @@
+---
+sidebar_position: 6
+title: Types
+description: Shared TypeScript interfaces used across cliq.
+---
+
+## Sessions
+
+```typescript title="src/types/session.ts"
+export interface Session {
+  readonly id: string;
+  readonly projectID: string;
+  readonly directory: string;
+  readonly title: string;
+  readonly version: string;
+  readonly time: {
+    readonly created: number;
+    readonly updated: number;
+  };
+}
+
+export interface StoredMessage {
+  readonly id: string;
+  readonly sessionID: string;
+  readonly role: "user" | "assistant" | "system";
+  readonly content: string;
+  readonly time: {
+    readonly created: number;
+  };
+}
+```
+
+## Configuration
+
+```typescript title="src/types/config.ts"
+export type Provider = "anthropic" | "openai" | "google";
+
+interface BaseConfig {
+  readonly model: string;
+  readonly temperature: number;
+  readonly maxTokens?: number;
+  readonly maxSteps?: number;
+}
+
+export interface AnthropicConfig extends BaseConfig {
+  readonly provider: "anthropic";
+  readonly apiKey?: string;
+  readonly options?: AnthropicOptions;
+}
+
+export type Config = AnthropicConfig | OpenAIConfig | GoogleConfig;
+
+export interface ProviderConfig {
+  readonly provider: Provider;
+  readonly model: string;
+  readonly apiKey?: string;
+}
+```
+
+## Tool metadata
+
+Tool-specific result types (for example, `DiffStats`, `ValidationResult`, `GrepMatch`) live alongside each tool module in `src/tools/`. Import from those files when you need rich type information for editor integrations or telemetry.
+
+:::tip Rely on exports
+Every shared type has a dedicated export. Instead of duplicating shapes in your extensions, import from `src/types/` so your code stays aligned with upstream changes.
+:::
+

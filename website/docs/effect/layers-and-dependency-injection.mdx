@@ -1,0 +1,135 @@
+---
+title: Layers & dependency injection
+description: How cliq composes Effect layers to keep dependencies explicit and swappable.
+---
+
+Effect layers are cliq’s dependency injection system. Services declare what they provide, layers wire them together, and the CLI entrypoint merges everything into a single runtime.
+
+## Services as layers
+
+```typescript title="src/services/ConfigService.ts"
+export const layer = Layer.effect(
+  ConfigService,
+  Effect.gen(function* () {
+    const store = yield* FileKeyValueStore;
+    const initialConfig = yield* initializeConfig(store);
+    const configRef = yield* Ref.make(initialConfig);
+
+    const load = Ref.get(configRef);
+    const current = load.pipe(
+      Effect.map((cfg) => ({
+        provider: cfg.provider,
+        model: cfg.model,
+        apiKey: cfg.apiKey,
+      })),
+    );
+
+    const setProvider = (provider: Provider, model: string) =>
+      Effect.gen(function* () {
+        yield* Effect.all([
+          Persistence.saveProvider(store, provider),
+          Persistence.saveModel(store, model),
+        ]);
+        const env = yield* EnvConfig.load;
+        const newConfig = ConfigBuilder.build(env, provider, model);
+        yield* Ref.set(configRef, newConfig);
+      });
+
+    return { load, current, setProvider };
+  }),
+);
+```
+
+- The layer returns a plain object, making it trivial to swap with a test double.
+- Consumers simply `yield* ConfigService` to access the implementation.
+
+## Composing complex stacks
+
+```typescript title="src/services/ToolRegistry.ts"
+export const layer = Layer.effect(
+  ToolRegistry,
+  Effect.sync(() => {
+    const pathValidationStack = PathValidationLayer.pipe(
+      Layer.provide(BunContext.layer),
+    );
+
+    const fileToolsRuntime = ManagedRuntime.make(
+      FileToolsLayer.pipe(
+        Layer.provide(pathValidationStack),
+        Layer.provide(BunContext.layer),
+        Layer.orDie,
+      ),
+    );
+
+    const searchToolsRuntime = ManagedRuntime.make(
+      SearchToolsLayer.pipe(Layer.provide(BunContext.layer), Layer.orDie),
+    );
+
+    const editToolsRuntime = ManagedRuntime.make(
+      EditToolsLayer.pipe(
+        Layer.provide(pathValidationStack),
+        Layer.provide(BunContext.layer),
+        Layer.orDie,
+      ),
+    );
+
+    const directoryToolsRuntime = ManagedRuntime.make(
+      DirectoryToolsLayer.pipe(
+        Layer.provide(pathValidationStack),
+        Layer.provide(BunContext.layer),
+        Layer.orDie,
+      ),
+    );
+
+    const toolsMap = makeAllTools(
+      fileToolsRuntime,
+      searchToolsRuntime,
+      editToolsRuntime,
+      directoryToolsRuntime,
+    );
+
+    return {
+      tools: Effect.succeed(toolsMap),
+      listToolNames: Effect.succeed(Object.keys(toolsMap).sort()),
+    };
+  }),
+);
+```
+
+- Each managed runtime gets the platform dependencies it needs.
+- Nothing executes until a tool is invoked; runtimes spin up lazily and stay isolated.
+
+## Merging into `MainLayer`
+
+```typescript title="src/cli.ts"
+const MainLayer = Layer.mergeAll(
+  BunContext.layer,
+  ConfigProviderLayer,
+  PlatformStack,
+  StorageLayer,
+  ConfigStack,
+  SessionStack,
+  PathValidationStack,
+  ToolsStack,
+  VercelStack,
+  RegistryStack,
+  MessageStack,
+);
+```
+
+- If a required layer is missing, TypeScript flags it immediately.
+- Swapping implementations (e.g., a different `SessionStore`) is a matter of providing a different layer before running the Effect.
+
+## Tips
+
+- Keep layers thin: expose the smallest interface that satisfies consumers.
+- Prefer `Layer.provide` over global singles to keep dependencies explicit.
+- When adding new services, wire them into `MainLayer` early so compilation fails if anything is missing.
+
+## Source
+
+- `src/cli.ts`
+- `src/services/ConfigService.ts`
+- `src/services/ToolRegistry.ts`
+- `src/tools/**/*`
+

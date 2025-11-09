@@ -1,0 +1,175 @@
+---
+id: 11-performance-and-concurrency
+title: "11 → Concurrency & tuning"
+description: Tune streaming behaviour, step limits, and resource usage to keep the CLI responsive.
+---
+
+## Overview
+
+### What you'll build
+
+This final step tunes the runtime for responsiveness: you’ll cap tool-call steps, tune provider options at runtime, and introduce safe concurrency so long-running I/O doesn’t freeze the chat loop.
+
+### Why it matters
+
+- Streaming models can run indefinitely if you don’t limit steps; guardrails prevent runaway tool loops.
+- Tool runtimes start faster when you batch initialization and reuse managed runtimes.
+- Carefully placed concurrency keeps the CLI responsive, while careless concurrency can corrupt storage or interleave terminal output.
+
+### Big picture
+
+Every step so far focused on capability. This one focuses on *operational quality*. It prepares you to ship the CLI for real users: configurable, resilient, and performant.
+
+<details>
+<summary><strong>Core concepts (Effect-TS)</strong></summary>
+
+### Step Limits & Provider Options
+`streamChat` accepts overrides for `maxSteps`, `temperature`, and `maxOutputTokens`. Wrap those defaults in `ConfigService` so you can change behaviour with `/model` or environment variables.
+
+### Lazy Managed Runtimes
+`ManagedRuntime.make` delays tool initialization until the first call. Compose new tool layers once and store them—don’t rebuild per request.
+
+### Safe Concurrency
+Use Effect’s combinators (`Effect.all`, `Effect.forEach`) with `concurrency` options for CPU-bound or I/O-bound work. Avoid parallelism when order matters (like writing session history) or when shared mutable state is involved.
+</details>
+
+---
+
+
+## Implementation
+## Implementation
+
+### Step 1: Expose provider tuning in `VercelAI`
+
+```typescript title="src/services/VercelAI.ts"
+const streamChat = <TOOLS extends ToolSet>(request: StreamChatRequest<TOOLS>) =>
+  Effect.gen(function* () {
+    const config = yield* configService.load;
+    const { messages, tools, maxSteps, temperature, onStepFinish } = request;
+
+    const model = yield* getModel;
+
+    return streamText({
+      model,
+      messages,
+      tools,
+      stopWhen: stepCountIs(maxSteps ?? config.maxSteps ?? 10),
+      temperature: temperature ?? config.temperature,
+      maxOutputTokens: config.maxTokens,
+      providerOptions: normalizeProviderOptions(config) as never,
+      onStepFinish,
+    });
+  });
+```
+
+Pair this with `/model` (Step 04) so users can adjust providers mid-session.
+
+### Step 2: Batch tool runtime setup
+
+```typescript title="src/services/ToolRegistry.ts"
+const toolRuntimes = Effect.all({
+  file: ManagedRuntime.make(fileToolsLayer),
+  search: ManagedRuntime.make(searchToolsLayer),
+  edit: ManagedRuntime.make(editToolsLayer),
+  directory: ManagedRuntime.make(directoryToolsLayer),
+  todo: ManagedRuntime.make(todoToolsLayer),
+});
+
+const toolsMap = makeAllTools(
+  runtimes.file,
+  runtimes.search,
+  runtimes.edit,
+  runtimes.directory,
+  runtimes.todo,
+);
+
+return {
+  tools: Effect.succeed(toolsMap),
+  listToolNames: Effect.succeed(Object.keys(toolsMap).sort()),
+} as const;
+```
+
+By batching the runtime creation, you avoid sequential startup costs while keeping the code declarative.
+
+### Step 3: Stream and persist without blocking
+
+```typescript title="src/chat/MessageService.ts"
+const assistantText = yield* handleChatStream(
+  messages,
+  tools,
+  { maxSteps: config.maxSteps ?? 10, temperature: config.temperature },
+  vercelAI,
+);
+
+const trimmed = assistantText.trim();
+
+yield* Effect.forEach(
+  [
+    Effect.sync(() => displayComplete()),
+    trimmed.length > 0
+      ? sessionStore.saveMessage(createAssistantMessage(trimmed, sessionId))
+      : Effect.void,
+  ],
+  { concurrency: 2 },
+);
+```
+
+Running terminal cleanup and persistence concurrently keeps the UI snappy without risking race conditions (messages write after streaming completes, not during it).
+
+---
+
+## Caution Notes
+
+- **Terminal output:** Don’t render markdown from multiple fibers simultaneously—it will interleave text. Keep rendering on the main loop, move storage/network I/O concurrently.
+- **Shared resources:** Anything touching `Ref` state (like `ConfigService`) should remain sequential unless you use `Effect.withConcurrency(1)`.
+- **Provider limits:** Some providers treat high `maxOutputTokens` as a request for large responses; cap it based on cost.
+
+---
+
+<details>
+<summary><strong>Testing & Validation</strong></summary>
+
+
+1. Lower `maxSteps` to 1 and verify the model stops calling tools after the first invocation.
+2. Increase `temperature` via `/model` and confirm the change applies immediately.
+3. Start the CLI and time tool initialization before/after batching runtimes.
+4. Simulate slow disk writes (e.g., add `Effect.sleep`) and confirm the UI remains responsive while messages persist.
+
+---
+
+</details>
+
+<details>
+<summary><strong>Common Issues</strong></summary>
+
+
+| Problem | Likely Cause | Fix |
+|---------|--------------|-----|
+| AI loops forever | `stopWhen` not configured | Use `stepCountIs(maxSteps ?? 10)` to cap tool calls |
+| CLI freezes during saves | Persistence runs on same fiber as UI | Offload storage writes with `Effect.forEach` concurrency |
+| Tool runtimes rebuilt per call | Not caching `ManagedRuntime.make` | Create runtimes once in `ToolRegistry` and reuse |
+| Provider rejects request | Token limit too high | Respect provider-specific max tokens in `normalizeProviderOptions` |
+
+---
+
+</details>
+
+<details>
+<summary><strong>Connections</strong></summary>
+
+
+**Builds on:**
+- [04 — Agent Loop](/docs/build-series/04-agent-loop) — The event loop you’re optimizing
+- [05 — Streaming Output](/docs/build-series/05-streaming) — The renderer that benefits from these tweaks
+- [10 — Add a Custom Tool](/docs/build-series/10-add-a-custom-tool) — Multiple managed runtimes now in play
+
+**Next steps:**
+- Experiment with caching (FileKeyValueStore) or metrics collection to monitor runtime behaviour.
+
+**Related code:**
+- `src/services/VercelAI.ts`
+- `src/services/ToolRegistry.ts`
+- `src/chat/MessageService.ts`
+- `src/services/ConfigService.ts`
+
+</details>

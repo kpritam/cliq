@@ -1,0 +1,189 @@
+---
+id: 09-session-persistence
+title: "09 → Session persistence"
+description: Store chat sessions and message history so conversations survive restarts.
+---
+
+## Overview
+
+### What you'll build
+
+You’re persisting conversations to disk so the CLI can resume where it left off. Each session stores metadata (directory, title, timestamps) and a chronological list of messages under `~/.cliq/storage/`.
+
+### Why it matters
+
+- Lets users close the CLI and resume later without losing context.
+- Enables analytics like “what files were edited?” or “what tools were used?”
+- Provides history for UI features (future Step 10 tools, dashboards, etc.).
+
+### Big picture
+
+Steps 01–08 focused on live interaction. This step closes the loop by making conversations durable. Later, Step 11 will address performance considerations (batching writes, concurrency).
+
+<details>
+<summary><strong>Core concepts (Effect-TS)</strong></summary>
+
+### Session vs. Message Namespace
+Sessions live under `session/<sessionId>.json`; messages live under `message/<sessionId>/<messageId>.json`. Keeping them separate allows quick listing of sessions without loading every message.
+
+### Stable Identifiers
+`generateID()` produces a unique message/session ID; `hashProject(directory)` ensures we group sessions by project path.
+
+### Serialization Helpers
+`serialize`/`deserialize` convert between TypeScript objects and JSON strings. They keep validation centralized and avoid duplicating JSON handling.
+</details>
+
+---
+
+
+## Implementation
+## Implementation
+
+### Step 1: Define the SessionStore layer
+
+```typescript title="src/persistence/SessionStore.ts"
+import { Effect, Layer, Option } from "effect";
+
+export const layer = Layer.effect(
+  SessionStore,
+  Effect.gen(function* () {
+    const store = yield* FileKeyValueStore;
+
+    const createSession = (directory: string, title: string) =>
+      Effect.all([timestamp(), generateID()]).pipe(
+        Effect.map(([now, id]) => ({
+          id,
+          projectID: hashProject(directory),
+          directory,
+          title,
+          version: "0.1.0",
+          time: { created: now, updated: now },
+        })),
+        Effect.tap((session) =>
+          serialize(session).pipe(
+            Effect.flatMap((json) => store.set("session", session.id, json)),
+          ),
+        ),
+      );
+
+    const saveMessage = (message: StoredMessage) =>
+      serialize(message).pipe(
+        Effect.flatMap((json) =>
+          store.set(messageNamespace(message.sessionID), message.id, json),
+        ),
+      );
+
+    const listMessages = (sessionID: string) =>
+      Effect.gen(function* () {
+        const keys = yield* store.listKeys(messageNamespace(sessionID));
+        const messages = yield* Effect.forEach(keys, (key) =>
+          Effect.gen(function* () {
+            const maybeMessage = yield* store.get(
+              messageNamespace(sessionID),
+              key,
+            );
+            const json = Option.getOrThrow(maybeMessage);
+            return yield* deserialize<StoredMessage>(json);
+          }),
+        );
+
+        return messages.sort((a, b) => a.time.created - b.time.created);
+      });
+
+    return {
+      createSession,
+      saveMessage,
+      listMessages,
+    } as const;
+  }),
+);
+```
+
+### Step 2: Create a session on startup
+
+```typescript title="src/chat/ChatProgram.ts"
+const session = yield* sessionStore.createSession(process.cwd(), "Cliq Session");
+yield* displayWelcome(session.id, config, toolNames);
+yield* chatLoop(session.id);
+```
+
+Use the project directory (`process.cwd()`) as part of the session identity, so each repo gets its own history.
+
+### Step 3: Persist messages as they stream
+
+```typescript title="src/chat/MessageService.ts"
+const userMessage = createUserMessage(input, sessionId);
+yield* sessionStore.saveMessage(userMessage);
+
+const assistantText = yield* streamTextToConsole(stream.textStream);
+
+if (assistantText.trim().length > 0) {
+  const assistantMessage = createAssistantMessage(assistantText.trim(), sessionId);
+  yield* sessionStore.saveMessage(assistantMessage);
+}
+```
+
+Wrap calls in `Effect.catchAll` so persistence errors don’t crash the chat loop—log and continue.
+
+---
+
+## Resetting Sessions
+
+Need a clean slate? Delete the storage directory:
+
+```bash
+rm -rf ~/.cliq/storage/session ~/.cliq/storage/message
+```
+
+Run the CLI again and a new session will be created automatically.
+
+---
+
+<details>
+<summary><strong>Testing & Validation</strong></summary>
+
+
+1. Start the CLI, ask a question, exit, and restart—history should reload.
+2. Inspect `~/.cliq/storage/session/*.json` to confirm metadata matches the project path.
+3. Delete the storage directory and confirm the CLI creates a new session without errors.
+4. Simulate a read failure (e.g., corrupt a message JSON) and ensure `Option.getOrThrow` surfaces a clear error.
+
+---
+
+</details>
+
+<details>
+<summary><strong>Common Issues</strong></summary>
+
+
+| Problem | Likely Cause | Fix |
+|---------|--------------|-----|
+| `Option` is undefined | Import missing in snippet | Add `import { Option } from "effect";` to `SessionStore.ts` |
+| Old sessions keep loading | Storage not cleared | Remove `~/.cliq/storage/session` and `message` directories |
+| Messages out of order | Not sorting after load | Ensure `listMessages` sorts by `time.created` |
+| Session files grow too large | Never archiving old history | Rotate or prune messages after N entries |
+
+---
+
+</details>
+
+<details>
+<summary><strong>Connections</strong></summary>
+
+
+**Builds on:**
+- [02 — Provider Configuration](/docs/build-series/02-provider-config) — Uses `FileKeyValueStore`
+- [04 — Agent Loop](/docs/build-series/04-agent-loop) — Persists everything processed by the loop
+
+**Sets up:**
+- [10 — Add a Custom Tool](/docs/build-series/10-add-a-custom-tool) — Example tool can query session history
+- [11 — Performance & Concurrency](/docs/build-series/11-performance-and-concurrency) — Shows how to batch persistence work
+
+**Related code:**
+- `src/persistence/SessionStore.ts`
+- `src/chat/ChatProgram.ts`
+- `src/chat/MessageService.ts`
+- `src/persistence/keys.ts`
+
+</details>
+

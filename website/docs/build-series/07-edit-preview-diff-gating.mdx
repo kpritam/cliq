@@ -1,0 +1,224 @@
+---
+id: 07-edit-preview-diff-gating
+title: "07 → Edit with preview and diff gating"
+description: Let the assistant propose edits, preview diffs, and gate risky changes before writing.
+---
+
+## Overview
+
+### What you'll build
+
+You’re teaching the assistant to stage edits safely. First it previews a diff (`previewEdit`), then it decides whether the change is safe to apply (`editFile`) based on validation rules. Learners should walk away knowing: *preview → review warnings/errors → apply (or reject) the edit*.
+
+### Why it matters
+
+- Prevents accidental binary writes or massive file bloats.
+- Forces the model to show a diff before writing risky changes.
+- Produces stats and warnings that future steps (like diff presenters) surface to the user.
+
+### Big picture
+
+This step is the guardrail between the AI and your filesystem. Search (Step 06) finds candidates, preview (this step) checks safety, and streaming (Step 05) renders the results. Later, Step 10 will add custom tools that rely on the same gating pattern.
+
+<details>
+<summary><strong>Core concepts (Effect-TS)</strong></summary>
+
+### Preview
+`previewEdit` never writes to disk. It returns the candidate diff, validation messages, and a `recommendation` (`proceed`, `review`, `abort`). Treat it like a dry run.
+
+### Gating
+`editFile` refuses to write if there are warnings or errors *and* the caller hasn’t opted in (`force: true`). Gating nudges the assistant to request a preview first and only proceed when the diff looks safe.
+
+### Validation
+Use `validateEdit` to detect hazards: huge files, suspicious characters, extreme line lengths. Anything in `errors` blocks the write; anything in `warnings` demands a preview before proceeding.
+</details>
+
+---
+
+
+## Implementation
+## Implementation
+
+### Step 1: Validate the proposed edit
+
+```typescript title="src/tools/EditTools.ts"
+const validateEdit = (original: string, updated: string) => {
+  const stats = computeStats(original, updated);
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  if (updated.length > 500_000) {
+    warnings.push("File becomes very large (>500KB)");
+  }
+
+  if (updated.includes("\u0000")) {
+    errors.push("Content contains null bytes");
+  }
+
+  if (updated.split("\n").some((line) => line.length > 2000)) {
+    warnings.push("Contains very long lines (>2000 chars)");
+  }
+
+  return {
+    isValid: errors.length === 0,
+    warnings,
+    errors,
+    changeStats: stats,
+  } as const;
+};
+```
+
+### Step 2: Return a preview recommendation
+
+```typescript title="src/tools/EditTools.ts"
+const previewEdit = (params: Schema.Schema.Type<typeof PreviewParameters>) =>
+  Effect.gen(function* () {
+    const { filePath, oldString, newString, replaceAll = false } = params;
+    const resolved = yield* pathValidation.ensureWithinCwd(filePath);
+    const content = yield* fs.readFileString(resolved);
+    const updated = yield* applyReplacement(content, oldString, newString, replaceAll, filePath);
+
+    const validation = validateEdit(content, updated);
+    const recommendation = !validation.isValid
+      ? "abort"
+      : validation.warnings.length > 0
+        ? "review"
+        : "proceed";
+
+    return {
+      path: pathValidation.relativePath(resolved),
+      diff: computeDiff(content, updated, filePath),
+      validation,
+      recommendation,
+    } as const;
+  });
+```
+
+### Step 3: Gate writes based on preview + validation
+
+```typescript title="src/tools/EditTools.ts"
+const editFile = (params: Schema.Schema.Type<typeof EditParameters>) =>
+  Effect.gen(function* () {
+    const { filePath, oldString, newString, replaceAll = false, preview, force } = params;
+
+    const resolved = yield* pathValidation.ensureWithinCwd(filePath);
+    const content = yield* fs.readFileString(resolved);
+    const updated = yield* applyReplacement(content, oldString, newString, replaceAll, filePath);
+
+    const validation = validateEdit(content, updated);
+    const stats = validation.changeStats;
+    const diff = computeDiff(content, updated, filePath);
+    const relPath = pathValidation.relativePath(resolved);
+
+    const shouldGate = (preview ?? true) && (!validation.isValid || validation.warnings.length > 0);
+    if (shouldGate && !force) {
+      return {
+        success: false,
+        path: relPath,
+        size: updated.length,
+        diff,
+        stats,
+        validation,
+        message: "Large or risky change detected. Preview recommended before applying.",
+        preview: diff,
+      } as const;
+    }
+
+    yield* fs.writeFileString(resolved, updated);
+
+    return {
+      success: true,
+      path: relPath,
+      size: updated.length,
+      diff,
+      stats,
+      validation,
+    } as const;
+  });
+```
+
+### Step 4: Wire adapters to expose the gating signals
+
+When adapting the tool for Vercel AI, surface `recommendation`, `warnings`, and `errors` so the model can react:
+
+```typescript title="src/adapters/EditToolAdapters.ts"
+previewEdit: tool({
+  description: "Preview an edit and return diff + validation",
+  inputSchema: z.object({
+    filePath: z.string(),
+    oldString: z.string(),
+    newString: z.string(),
+    replaceAll: z.boolean().optional(),
+  }),
+  execute: (input) => runtime.runPromise(
+    Effect.flatMap(EditTools, (tools) => tools.previewEdit(input))
+  ),
+});
+
+editFile: tool({
+  description: "Apply an edit with gating and diff stats",
+  inputSchema: z.object({
+    filePath: z.string(),
+    oldString: z.string(),
+    newString: z.string(),
+    replaceAll: z.boolean().optional(),
+    preview: z.boolean().optional(),
+    force: z.boolean().optional(),
+  }),
+  execute: (input) => runtime.runPromise(
+    Effect.flatMap(EditTools, (tools) => tools.editFile(input))
+  ),
+});
+```
+
+Expose a clear contract: if `success` is false, the model should dig into `validation` and decide what to do next (usually call `previewEdit`).
+
+---
+
+<details>
+<summary><strong>Testing & Validation</strong></summary>
+
+
+1. Run `previewEdit` on a small change—expect `recommendation: "proceed"`.
+2. Introduce a warning (e.g., add a very long line); the recommendation should become `"review"` and `editFile` should gate unless forced.
+3. Inject a null byte in `newString`; `validation.isValid` should be false and `editFile` must refuse to write.
+4. Set `force: true` and confirm the write succeeds even when warnings exist (errors still block it).
+
+---
+
+</details>
+
+<details>
+<summary><strong>Common Issues</strong></summary>
+
+
+| Problem | Likely Cause | Fix |
+|---------|--------------|-----|
+| `previewEdit` writes to disk | Using `fs.writeFileString` in preview | Ensure preview only calls `computeDiff` and returns data |
+| Gating never triggers | `(preview ?? true)` set to `false` in adapter | Default `preview` to `true` unless user explicitly opts out |
+| Assistant ignores warnings | Not surfacing `validation` in adapter | Return warnings/errors in the tool response so the model sees them |
+| Diff shows absolute paths | Skipped `pathValidation.relativePath` | Always return relative paths to avoid leaking filesystem details |
+
+---
+
+</details>
+
+<details>
+<summary><strong>Connections</strong></summary>
+
+
+**Builds on:**
+- [03 — First Tool](/docs/build-series/03-first-tool-readfile) — Reuses `PathValidation`
+- [06 — Search with Glob and Ripgrep](/docs/build-series/06-search-glob-grep) — Provides candidates to edit
+
+**Sets up:**
+- [08 — Markdown Rendering](/docs/build-series/08-markdown-rendering) — Renders preview diffs for display
+- [10 — Add a Custom Tool](/docs/build-series/10-add-a-custom-tool) — Reuses the preview/force pattern
+
+**Related code:**
+- `src/tools/EditTools.ts`
+- `src/utils/diff.ts`
+- `src/adapters/EditToolAdapters.ts`
+- `src/chat/ui/ToolResultPresenter.ts`
+
+</details>

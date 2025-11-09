@@ -1,0 +1,87 @@
+---
+title: Vercel AI SDK
+description: Understand how cliq wraps the Vercel AI SDK to stream chat, execute tools, and control provider settings.
+---
+
+## Role in the runtime
+
+`VercelAI` centralises model resolution, provider options, and `streamChat` integration. Every chat request flows through this service so configuration changes and tool execution stay consistent.
+
+## Core flow
+
+```typescript title="src/services/VercelAI.ts"
+const streamChat = <TOOLS extends ToolSet>(
+  request: StreamChatRequest<TOOLS>,
+) =>
+  Effect.gen(function* () {
+    // Load configuration and model
+    const config = yield* configService.load;
+    const model = yield* getModel;
+
+    const { messages, tools, maxSteps, temperature, onStepFinish } = request;
+
+    return streamText({
+      model,
+      messages,
+      tools,
+      // Limit tool-calling iterations
+      stopWhen: stepCountIs(maxSteps ?? config.maxSteps ?? 10),
+      temperature: temperature ?? config.temperature,
+      maxOutputTokens: config.maxTokens,
+      providerOptions: normalizeProviderOptions(config) as never,
+      onStepFinish,
+    });
+  });
+```
+
+- **Model resolution** — `getModel` lazy-loads the provider-specific client via `createAnthropic`, `createOpenAI`, or `createGoogleGenerativeAI`.
+- **Step gating** — `stepCountIs` limits tool calls per response; callers can override `maxSteps` when required.
+- **Provider options** — `normalizeProviderOptions` passes through provider-specific configuration stored in `ConfigService`.
+- **Streaming hook** — `onStepFinish` forwards tool calls/results to the UI presenters.
+
+## Request contract
+
+```typescript title="src/services/VercelAI.ts"
+export interface StreamChatRequest<TOOLS extends ToolSet = ToolSet> {
+  readonly messages: ModelMessage[];
+  readonly tools: TOOLS;
+  readonly maxSteps?: number;
+  readonly temperature?: number;
+  readonly onStepFinish?: (step: StepResult<TOOLS>) => void;
+}
+```
+
+- `messages` — history produced by `MessageService` (system prompt + conversation).
+- `tools` — the `ToolSet` from `ToolRegistry`.
+- `onStepFinish` — invoked for every tool call/result chunk; optional for fire-and-forget streams.
+
+## Typical usage
+
+Inside `MessageService`:
+
+```typescript title="src/chat/MessageService.ts"
+const assistantText = yield* handleChatStream(
+  messages,
+  tools,
+  {
+    maxSteps: config.maxSteps ?? 10,
+    temperature: config.temperature,
+  },
+  vercelAI,
+);
+```
+
+`handleChatStream` calls `vercelAI.streamChat` and subscribes to the incremental output, keeping the CLI responsive.
+
+## Experiments
+
+- Increase `AI_MAX_STEPS` to allow more tool iterations per request.
+- Override `temperature` per message to explore creative vs deterministic behaviour.
+- Provide custom `onStepFinish` callbacks to log raw tool payloads for debugging.
+
+## Source
+
+- `src/services/VercelAI.ts`
+- `src/chat/MessageService.ts`
+- `src/services/ConfigService.ts`
+

@@ -1,0 +1,24 @@
+---
+title: Mechanics Overview
+description: Trace the major subsystems—agent loop, Vercel AI SDK, tools, diffs, markdown, and terminal UI—with focused explanations and code references.
+---
+
+The mechanics track explains how each subsystem works once you have the agent running. Each page pairs short context with the exact code that powers the feature, so you can reason about behaviour without stepping through the entire build series again.
+
+## Topics
+
+- Agent loop — input prompts, slash commands, readline lifecycle.
+- [Vercel AI SDK](./vercel-ai-sdk) — streaming chat integration, step gating, provider options.
+- [Tool execution](./tool-execution) — adapters, managed runtimes, schema validation.
+- [Diff rendering](./diff-rendering) — computing diffs, stats, and terminal presentation.
+- [Markdown rendering](./markdown-rendering) — parsing and displaying docs in the terminal.
+- [Terminal UI](./terminal-ui) — colour palette, frames, tool result presenters.
+
+## How to use these pages
+
+- Skim the diagrams and snippets before editing the source—they highlight the data flow and Effect layers involved.
+- Open the referenced files alongside the docs. Each section includes navigation cues so you can jump straight into `src/`.
+- When experimenting with new tools or UI changes, start here to understand the surfaces you are touching.
+
+Looking for a step-by-step rebuild? Return to the [Build Series](/docs/build-series/overview). If you want to dive deeper into Effect layer composition or service design, move to the [Effect Deep Dive](/docs/effect/overview).
+

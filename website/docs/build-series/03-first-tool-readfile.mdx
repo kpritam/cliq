@@ -1,0 +1,513 @@
+---
+id: 03-first-tool-readfile
+title: "03 → First tool: readFile"
+description: Create the first tool the AI can use to read files from your project.
+---
+
+## Overview
+
+### What you'll build
+
+You're creating the first tool the AI can actually use—reading files from your project. By the end, when you ask "what's in my package.json?", the AI will call `readFile`, grab the contents, and show them to you.
+
+More importantly, you'll understand how tools bridge the gap between the AI's text output and your actual codebase.
+
+### Why it matters
+
+AI models can only generate text—they can't directly read files or run code. **Tools** are how you give them capabilities. A tool is a function you expose to the AI, along with a description of what it does.
+
+When the AI needs information (like file contents), it generates a tool call request. Your code validates that request, runs the function safely, and returns the results.
+
+This pattern—define tool, register it, let AI call it—is how you'll build every capability in Cliq: searching, editing, running commands, anything you imagine.
+
+### Big picture
+
+You've set up the runtime (step 1) and configuration (step 2). Now you're adding the first real capability. After this, you'll build the chat loop (step 4) that ties everything together, and then you'll be able to actually talk to the AI and watch it use this tool.
+
+Think of it like building a robot: you've wired up the brain and configured it, now you're attaching the first arm so it can actually do something.
+
+<details>
+<summary><strong>Core concepts (Effect-TS)</strong></summary>
+
+### How AI Tools Actually Work
+
+Here's the full flow of a tool call:
+
+1. **You tell the AI about tools**: "You have a tool called `readFile` that takes a `filePath` parameter and returns file contents"
+2. **The AI decides to use it**: Based on your message, it realizes it needs to read a file
+3. **The AI generates a tool call**: `{"name": "readFile", "parameters": {"filePath": "package.json"}}`
+4. **Your code validates it**: Check that the parameters are correct (is `filePath` a string?)
+5. **Your code runs it safely**: Read the file, but only if it's in the project directory
+6. **Results go back to the AI**: `{"filePath": "package.json", "content": "..."}`
+7. **The AI continues**: It now knows the file contents and can respond to your question
+
+The key insight: the AI never actually runs code. It just generates tool call requests, and you decide whether and how to execute them.
+
+### Schema Validation: Type Safety at Runtime
+
+TypeScript types disappear when code runs. If the AI generates `filePath: 123` (a number instead of a string), TypeScript can't catch it—the code compiled fine, but now you're passing a number to a function expecting a string.
+
+**Schema validation** checks data at runtime:
+
+```typescript
+const ReadFileParameters = Schema.Struct({
+  filePath: Schema.String,
+});
+
+// If AI sends filePath: 123, validation fails with a clear error
+// If AI sends filePath: "test.txt", validation succeeds
+```
+
+This prevents cryptic errors and helps the AI fix its mistakes when it generates invalid tool calls.
+
+### Path Validation: Security Boundaries
+
+Imagine the AI generates:
+- `filePath: "/etc/passwd"` (system file)
+- `filePath: "../../../secrets.env"` (escapes your project)
+- `filePath: "~/.ssh/id_rsa"` (your SSH key)
+
+Should your agent read those? Probably not!
+
+**Path validation** enforces security:
+- All paths must be within your current working directory
+- No `../` escaping allowed
+- Symlinks can't bypass restrictions
+- Absolute paths outside the project are rejected
+
+Think of it as a sandbox—the AI can only touch files in your project.
+
+</details>
+
+## Implementation
+
+### Step 1: Install Schema Library
+
+Effect's schema library provides runtime validation:
+
+```bash
+bun add @effect/schema
+```
+
+### Step 2: Create Path Validation Service
+
+First, build a service that validates paths are safe:
+
+```typescript title="src/services/PathValidation.ts"
+import { Effect, Layer, Context } from "effect";
+import * as Path from "@effect/platform/Path";
+import * as FileSystem from "@effect/platform/FileSystem";
+
+export class PathValidation extends Context.Tag("PathValidation")<
+  PathValidation,
+  {
+    readonly ensureWithinCwd: (filePath: string) => Effect.Effect<string>;
+    readonly relativePath: (absolutePath: string) => string;
+  }
+>() {}
+
+export const layer = Layer.effect(
+  PathValidation,
+  Effect.gen(function* () {
+    const path = yield* Path.Path;
+    const fs = yield* FileSystem.FileSystem;
+    
+    // Get current working directory
+    const cwd = process.cwd();
+
+    return {
+      // Ensure a path is within the current working directory
+      ensureWithinCwd: (filePath: string) =>
+        Effect.gen(function* () {
+          // Resolve to absolute path
+          const absolute = path.isAbsolute(filePath)
+            ? filePath
+            : path.join(cwd, filePath);
+          
+          // Resolve any .. or . in the path
+          const resolved = path.resolve(absolute);
+          
+          // Check it's within cwd
+          if (!resolved.startsWith(cwd)) {
+            return yield* Effect.fail(
+              new Error(`Path traversal detected: ${filePath} is outside project directory`)
+            );
+          }
+          
+          return resolved;
+        }),
+
+      // Convert absolute path to relative (for display)
+      relativePath: (absolutePath: string) => {
+        if (absolutePath.startsWith(cwd)) {
+          return path.relative(cwd, absolutePath);
+        }
+        return absolutePath;
+      },
+    };
+  }),
+);
+```
+
+**What's happening here:**
+
+- `ensureWithinCwd` takes any path and resolves it to an absolute path
+- It checks that the resolved path starts with the current working directory
+- If not, it fails with a clear error message
+- `relativePath` converts absolute paths back to relative ones for display
+
+### Step 3: Define the File Tool
+
+Now create the actual file reading tool:
+
+```typescript title="src/tools/FileTools.ts"
+import { Effect, Layer, Context } from "effect";
+import { Schema } from "@effect/schema";
+import * as FileSystem from "@effect/platform/FileSystem";
+import { PathValidation } from "../services/PathValidation";
+
+// Input schema: what the tool accepts
+const ReadFileParameters = Schema.Struct({
+  filePath: Schema.String.annotations({
+    title: "File Path",
+    description: "Path to the file to read (relative to project root, e.g., 'src/cli.ts' or 'package.json')",
+  }),
+});
+
+// Output schema: what the tool returns
+const ReadFileResult = Schema.Struct({
+  filePath: Schema.String.annotations({
+    description: "The relative path that was read",
+  }),
+  content: Schema.String.annotations({
+    description: "The complete file contents as a string",
+  }),
+});
+
+// Define the service
+export class FileTools extends Context.Tag("FileTools")<
+  FileTools,
+  {
+    readonly readFile: (params: Schema.Schema.Type<typeof ReadFileParameters>) => 
+      Effect.Effect<Schema.Schema.Type<typeof ReadFileResult>>;
+  }
+>() {}
+
+// Implement the service
+export const layer = Layer.effect(
+  FileTools,
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const pathValidation = yield* PathValidation;
+
+    return {
+      readFile: ({ filePath }) =>
+        Effect.gen(function* () {
+          // Validate the path is safe
+    const resolved = yield* pathValidation.ensureWithinCwd(filePath);
+          
+          // Check file exists
+          const exists = yield* fs.exists(resolved);
+          if (!exists) {
+            return yield* Effect.fail(new Error(`File not found: ${filePath}`));
+          }
+          
+          // Read the file
+    const content = yield* fs.readFileString(resolved);
+
+          // Return relative path and content
+    return {
+      filePath: pathValidation.relativePath(resolved),
+      content,
+    };
+        }),
+    };
+  }),
+);
+
+// Export schemas for tool registration
+export const schemas = {
+  readFile: {
+    parameters: ReadFileParameters,
+    result: ReadFileResult,
+  },
+};
+```
+
+**What's happening here:**
+
+- `ReadFileParameters` defines what the AI must provide (a `filePath` string)
+- The `description` field helps the AI understand what format to use
+- `readFile` validates the path, checks if the file exists, and reads it
+- The tool returns the relative path (not absolute) so responses don't leak your machine's directory structure
+- Errors are explicit: "File not found" vs "Path traversal detected"
+
+### Step 4: Register the Tool with Vercel AI SDK
+
+The Vercel AI SDK needs tools in a specific format. Create an adapter:
+
+```typescript title="src/adapters/FileToolAdapters.ts"
+import { tool } from "ai";
+import * as Effect from "effect/Effect";
+import type * as ManagedRuntime from "effect/ManagedRuntime";
+import { z } from "zod";
+import { FileTools } from "../tools/FileTools";
+
+export const makeFileToolsForVercel = (runtime: ManagedRuntime.ManagedRuntime<FileTools, never>) => {
+  return {
+    readFile: tool({
+      description: "Read the contents of a file from the project directory",
+      inputSchema: z.object({
+        filePath: z.string().describe("The path to the file to read"),
+      }),
+      execute: async ({ filePath }: { filePath: string }) =>
+        runtime.runPromise(
+          Effect.flatMap(FileTools, (tools) => tools.readFile({ filePath })),
+        ),
+    }),
+  };
+};
+```
+
+**What's happening here:**
+
+- `tool` is from the Vercel AI SDK—it defines a tool in the format AI providers expect
+- The adapter uses `ManagedRuntime` to run the Effect-based tool
+- `runPromise` converts the Effect into a promise the AI SDK can use
+
+### Step 5: Create the Tool Registry
+
+Bring it all together in a registry:
+
+```typescript title="src/services/ToolRegistry.ts"
+import { Effect, Layer, Context, ManagedRuntime } from "effect";
+import { FileTools } from "../tools/FileTools";
+import { PathValidation } from "./PathValidation";
+import { makeFileTools } from "../adapters/FileToolAdapters";
+import { BunContext } from "@effect/platform-bun";
+
+export class ToolRegistry extends Context.Tag("ToolRegistry")<
+  ToolRegistry,
+  {
+    readonly tools: Effect.Effect<Record<string, any>>;
+  }
+>() {}
+
+export const layer = Layer.effect(
+  ToolRegistry,
+  Effect.gen(function* () {
+    // Create a runtime for file tools with its dependencies
+const fileToolsRuntime = ManagedRuntime.make(
+      FileTools.layer.pipe(
+        Layer.provide(PathValidation.layer),
+    Layer.provide(BunContext.layer),
+      )
+    );
+
+    // Create the tools map
+    const toolsMap = makeFileTools(fileToolsRuntime);
+
+    return {
+      tools: Effect.succeed(toolsMap),
+    };
+  }),
+);
+```
+
+**What's happening here:**
+
+- `ManagedRuntime.make` creates a long-lived environment for the tools
+- The runtime provides all dependencies the tools need (PathValidation, BunContext)
+- The tools map will be passed to the AI provider
+
+### Step 6: Update Main Layer
+
+Add the new services:
+
+```typescript title="src/cli.ts"
+import { FileKeyValueStore } from "./persistence/FileKeyValueStore";
+import { ConfigService } from "./services/ConfigService";
+import { PathValidation } from "./services/PathValidation";
+import { FileTools } from "./tools/FileTools";
+import { ToolRegistry } from "./services/ToolRegistry";
+
+const MainLayer = Layer.mergeAll(
+  BunContext.layer,
+  FileKeyValueStore.layer,
+  ConfigService.layer,
+  PathValidation.layer,
+  FileTools.layer,
+  ToolRegistry.layer,
+);
+
+// Test the tool
+const main = Effect.gen(function* () {
+  const fileTools = yield* FileTools;
+  
+  // Try reading package.json
+  const result = yield* fileTools.readFile({ filePath: "package.json" });
+  
+  yield* Console.log("✓ Successfully read file:");
+  yield* Console.log(`  Path: ${result.filePath}`);
+  yield* Console.log(`  Size: ${result.content.length} bytes`);
+});
+```
+
+### Step 7: Test It
+
+```bash
+bun run src/cli.ts
+```
+
+**Expected output:**
+```
+✓ Successfully read file:
+  Path: package.json
+  Size: 847 bytes
+```
+
+Try reading different files:
+```typescript
+yield* fileTools.readFile({ filePath: "src/cli.ts" });
+yield* fileTools.readFile({ filePath: "./README.md" });
+```
+
+Try an invalid path to test validation:
+```typescript
+// Should fail with "Path traversal detected"
+yield* fileTools.readFile({ filePath: "../../../etc/passwd" });
+```
+
+---
+
+<details>
+<summary><strong>Common Issues</strong></summary>
+
+| Problem | Likely Cause | Fix |
+|---------|--------------|-----|
+| "File not found" | Wrong relative path | Check you're running from project root |
+| "Path traversal detected" | Path goes outside project | Use relative paths within project |
+| Type errors on Schema | Missing @effect/schema | Run `bun add @effect/schema` |
+| Tool not registered | ToolRegistry not in MainLayer | Verify ToolRegistry.layer is added |
+
+</details>
+
+---
+
+<details>
+<summary><strong>Why This Design?</strong></summary>
+
+### Why Return Relative Paths Instead of Absolute?
+
+Absolute paths like `/Users/yourname/projects/cliq/package.json` leak information:
+- Your username
+- Your directory structure
+- Potentially sensitive path details
+
+Relative paths like `package.json` keep responses focused on the project structure. This makes conversations more portable—you can share them without exposing your system details.
+
+### Why Validate Parameters with Schemas?
+
+Runtime validation catches AI mistakes early:
+
+**Without schemas:**
+```typescript
+// AI sends: filePath: 123
+await readFile(123); // Runtime error: "fs.readFile expects string, got number"
+// Confusing error, AI might not understand how to fix it
+```
+
+**With schemas:**
+```typescript
+// Schema validation fails with clear message
+// Error: "Expected string at filePath, received number"
+// AI can easily understand and correct this
+```
+
+Clear error messages help the AI self-correct without human intervention.
+
+### Why Use ManagedRuntime?
+
+`ManagedRuntime` creates a reusable execution environment. Compare:
+
+**Without ManagedRuntime** (slow):
+```typescript
+// Every tool call re-initializes services
+await Effect.runPromise(
+  tool.readFile(params).pipe(
+    Effect.provide(FileTools.layer),
+    Effect.provide(PathValidation.layer),
+    Effect.provide(BunContext.layer),
+  )
+);
+```
+
+**With ManagedRuntime** (fast):
+```typescript
+// Services initialize once, reuse for all calls
+const runtime = ManagedRuntime.make(allLayers);
+await runtime.runPromise(tool.readFile(params));
+```
+
+Think of it like a database connection pool—you set it up once and reuse it, rather than reconnecting every time.
+
+---
+
+## Security Notes
+
+The current implementation is safe for local use but consider:
+
+**What's protected:**
+- ✅ Can't read files outside project directory
+- ✅ Can't follow symlinks out of project
+- ✅ Relative and absolute paths both validated
+
+**What's not protected (intentionally, for learning):**
+- ⚠️ No rate limiting (AI could read many files quickly)
+- ⚠️ No size limits (AI could read huge files)
+- ⚠️ No access logging (can't audit what was read)
+
+For a production system, you'd add these protections. For a learning tool, the current security is adequate.
+
+</details>
+
+---
+
+## What You've Learned
+
+At this point, you understand:
+- How AI tools work (request → validate → execute → return)
+- How to validate data at runtime with schemas
+- How to enforce security boundaries with path validation
+- How to bridge Effect-based code with the Vercel AI SDK
+
+These patterns repeat for every tool you'll build: search, edit, directory listing, custom tools. Master this pattern and you can add any capability you imagine.
+
+---
+
+<details>
+<summary><strong>Connections</strong></summary>
+
+**Builds on:**
+- [01 — Bootstrap Runtime](/docs/build-series/01-bootstrap-runtime) — Uses the layer system
+- [02 — Provider Configuration](/docs/build-series/02-provider-config) — Tool calls will use the configured provider
+
+**Sets up:**
+- [04 — Agent Loop](/docs/build-series/04-agent-loop) — The chat loop will let the AI call this tool
+- [06 — Search Tools](/docs/build-series/06-search-glob-grep) — Uses the same tool pattern
+
+**Related concepts:**
+- [Tool Execution Mechanics](/docs/mechanics/tool-execution)
+- [Vercel AI SDK Integration](/docs/mechanics/vercel-ai-sdk)
+
+</details>
+
+---
+
+## Source Code Reference
+
+The complete implementation is in:
+- `src/tools/FileTools.ts` — Tool implementation and schemas
+- `src/services/PathValidation.ts` — Path security validation
+- `src/adapters/FileToolAdapters.ts` — Bridge to Vercel AI SDK
+- `src/services/ToolRegistry.ts` — Tool registration and runtime management

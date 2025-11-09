@@ -1,0 +1,15 @@
+{
+	"formatter": {
+		"indentWidth": 2
+	},
+	"linter": {
+		"rules": {
+			"complexity": {
+				"useArrowFunction": "error"
+			}
+		}
+	},
+	"files": {
+		"includes": ["src/**", "*.json", "*.md", "*.ts"]
+	}
+}

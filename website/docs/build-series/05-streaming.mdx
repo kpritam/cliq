@@ -1,0 +1,176 @@
+---
+id: 05-streaming
+title: "05 → Streaming output"
+description: Render assistant responses, tool calls, and markdown in the terminal.
+---
+
+## Overview
+
+### What you'll build
+
+You're teaching the assistant to stream its responses like a real-time terminal UI. That means framing the output, printing tokens as they arrive, and showing tool activity in-flight. All of this code lives in `src/chat/MessageService.ts` and builds directly on the loop from [Step 04](/docs/build-series/04-agent-loop).
+
+### Why it matters
+
+- Readers get instant feedback when the model starts thinking—no more long silences.
+- Tool invocations are visible as they happen, making debugging and audit trails easier.
+- Markdown stays readable in a terminal because it’s rendered and wrapped consistently.
+
+### Big picture
+
+Step 04 gave you the chat loop; this step upgrades the experience layer. After wiring streaming, Step 06 will expand tool coverage and Step 07 will add edit previews. Treat this as the UI pass on your minimal viable agent.
+
+<details>
+<summary><strong>Core concepts (Effect-TS)</strong></summary>
+
+### Status Frames
+The `UI` helpers (icons, colors, borders) live in `src/chat/ui/ChatUI.ts`. Reusing them keeps styling consistent across status messages, tool output, and diff previews. Think of them as your design system for the CLI.
+
+### Chunked Streaming
+`streamText` returns an async iterator. If you buffer the iterator into one big string you lose interactivity. Writing each chunk as soon as it arrives keeps latency low, then you can prettify the final text once streaming completes.
+
+### Tool Step Events
+Providers emit step metadata (`toolCalls`, `toolResults`) inside `onStepFinish`. Forward those events to `ToolResultPresenter` so users can see exactly which tool executed and what it returned.
+</details>
+
+---
+
+## Implementation
+
+### Step 1: Import UI helpers
+
+In `src/chat/MessageService.ts`, pull in the shared UI helpers and define the status frames:
+
+```typescript title="src/chat/MessageService.ts"
+import { UI } from "./ui/ChatUI";
+
+const displayProcessing = () =>
+  Console.log(
+    UI.Colors.BORDER("\n╭─ ") +
+      UI.Colors.TOOL(`${UI.Icons.PROCESSING} `) +
+      UI.Colors.MUTED("Processing...") +
+      UI.Colors.BORDER(` ${"─".repeat(62)}`),
+  );
+
+const displayAssistantHeader = () =>
+  Console.log(
+    "\n" +
+      UI.Colors.BORDER("╭─ ") +
+      UI.Colors.ACCENT(`${UI.Icons.ASSISTANT} `) +
+      UI.Colors.ACCENT_BRIGHT("Assistant") +
+      " " +
+      UI.Colors.BORDER("─".repeat(66)),
+  );
+
+const displayComplete = () =>
+  Console.log(`${UI.Colors.BORDER(`╰${"─".repeat(78)}`)}\n`);
+```
+
+Call `displayProcessing()` before you start streaming, use `displayAssistantHeader()` right before rendering the assistant text, and finish with `displayComplete()`.
+
+### Step 2: Stream markdown chunk by chunk
+
+Replace the buffered implementation with chunked writes. You still collect the full response so you can render the final markdown with consistent wrapping:
+
+```typescript title="src/chat/MessageService.ts"
+const streamTextToConsole = (textStream: AsyncIterable<string>) =>
+  Effect.promise(async () => {
+    let text = "";
+    for await (const chunk of textStream) {
+      process.stdout.write(chunk); // stream immediately
+      text += chunk;
+    }
+
+    const rendered = renderMarkdownToTerminal(text, 76);
+    console.log("\n" + UI.indent(rendered, 2));
+    return text;
+  });
+```
+
+### Step 3: Surface tool events as they happen
+
+Forward `onStepFinish` data to the presenter helpers in `src/chat/ToolPresenter.ts`. They handle formatting the diff/tool payloads for you:
+
+```typescript title="src/chat/MessageService.ts"
+const result = yield* vercelAI.streamChat({
+  messages,
+  tools,
+  maxSteps: config.maxSteps,
+  temperature: config.temperature,
+  onStepFinish: (step) => {
+    if (step.toolCalls?.length) {
+      presentToolCalls(step.toolCalls);
+    }
+    if (step.toolResults?.length) {
+      presentToolResults(step.toolResults);
+    }
+  },
+});
+```
+
+### Step 4: Stitch everything into `sendMessage`
+
+Wrap the streaming logic around your existing request flow. The final code (simplified) looks like:
+
+```typescript title="src/chat/MessageService.ts"
+displayProcessing();
+
+const stream = yield* vercelAI.streamChat({ messages, tools, onStepFinish });
+
+displayAssistantHeader();
+const assistantText = yield* streamTextToConsole(stream.textStream);
+displayComplete();
+
+if (assistantText.trim().length > 0) {
+  yield* sessionStore.saveMessage(createAssistantMessage(assistantText, sessionId));
+}
+```
+
+Keep error handling in place (`Effect.catchAll`) so failed tool calls or network hiccups still clear the frames properly.
+
+---
+
+<details>
+<summary><strong>Testing & Validation</strong></summary>
+
+1. Ask a question that doesn’t require tools—text should stream token by token.
+2. Ask for a file read; you should see `presentToolCalls` fire before the file contents render.
+3. Resize your terminal and confirm the markdown reflow still looks good (76 columns).
+4. Interrupt with `Ctrl+C`; `displayComplete()` should still fire before the program exits.
+
+</details>
+
+---
+
+<details>
+<summary><strong>Common Issues</strong></summary>
+
+| Problem | Likely Cause | Fix |
+|---------|--------------|-----|
+| Nothing prints until the end | Still buffering `text += chunk` without `process.stdout.write` | Use the chunked streaming version above |
+| UI icons show as question marks | Terminal lacks Unicode support | Switch to UTF-8 locale or update the icons in `ChatUI.ts` |
+| Tool events never appear | `presentToolCalls`/`presentToolResults` not imported | Import them from `src/chat/ToolResultPresenter.ts` and keep `onStepFinish` wiring |
+| Markdown wraps too wide | Width argument not passed to renderer | Ensure `renderMarkdownToTerminal(text, 76)` uses a fixed width |
+
+</details>
+
+---
+
+<details>
+<summary><strong>Connections</strong></summary>
+
+**Builds on:**
+- [04 — Agent Loop](/docs/build-series/04-agent-loop) — Uses the chat loop and `MessageService`
+
+**Sets up:**
+- [06 — Search with Glob and Ripgrep](/docs/build-series/06-search-glob-grep) — Adds more tools that will stream through this UI
+- [08 — Markdown Rendering](/docs/build-series/08-markdown-rendering) — Explains the renderer used here
+
+**Related code:**
+- `src/chat/MessageService.ts`
+- `src/chat/ui/ChatUI.ts`
+- `src/chat/ToolResultPresenter.ts`
+- `src/utils/markdown/renderer.ts`
+
+</details>
+

@@ -1,0 +1,231 @@
+---
+id: 01-bootstrap-runtime
+title: "01 → Bootstrap the runtime"
+description: Set up the Bun runtime and Effect-TS environment with the Filesystem/BunContext layer.
+---
+
+## Overview
+
+### What you'll build
+
+In this step, you'll set up the Bun runtime and Effect-TS environment with the Filesystem/BunContext layer. This provides the foundation for file system access, path operations, and terminal I/O that all future features will depend on. By the end, you'll run a simple program that proves the runtime is initialized correctly.
+
+### Why it matters
+
+Every feature you'll build later (reading files, editing code, streaming AI responses) depends on services like "file system" or "AI configuration." Effect-TS uses a pattern called **Layers** to manage these services.
+
+Instead of manually passing services through function calls (which gets messy fast), you declare what each service needs, and Effect connects them automatically. This step sets up that foundation. Get this right, and adding features becomes straightforward—you just add new layers without rewriting existing code.
+
+### Big picture
+
+Right now, you have an empty project. After this step, you'll have a running program with all services initialized and ready to use. In the next step, you'll add configuration to choose between AI providers like Anthropic or OpenAI.
+
+<details>
+<summary><strong>Core concepts (Effect-TS)</strong></summary>
+
+### What Are Layers?
+
+Imagine you're building with LEGO. A **Layer** is like an instruction sheet that says "to build a car, you need wheels and a chassis." Effect reads these instructions and assembles the parts in the right order.
+
+In code terms, a Layer is a recipe for creating a service. For example:
+- The `StorageLayer` needs `FileSystem` to work
+- The `ConfigStack` needs `StorageLayer` (to save settings)
+- Effect automatically figures out the right order and initializes them
+
+Here's the key insight: **Layers are just values**. You can test them, swap them, or combine them differently without changing the code that uses them.
+
+### Effect.provide: Giving Your Program What It Needs
+
+When you write a program like `Console.log("hello")`, you're creating a *description* of work. It doesn't actually run until you tell it to.
+
+But what if your program needs services like `ConfigService`? That's where `Effect.provide` comes in—it "provides" the services your program needs. Think of it like handing a carpenter their toolbox before they start building.
+
+</details>
+
+---
+
+## Implementation
+
+### Step 1: Set Up Your Project
+
+First, create a new project and install dependencies:
+
+```bash
+# Create project directory
+mkdir my-cliq
+cd my-cliq
+
+# Initialize with Bun (or use npm/yarn)
+bun init -y
+
+# Install Effect and platform libraries
+bun add effect @effect/platform @effect/platform-bun
+bun add -d typescript @types/bun
+```
+
+Create a basic TypeScript config:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}
+```
+
+### Step 2: Define the Main Layer
+
+Create the entry point that combines all services:
+
+```typescript title="src/cli.ts"
+import { Effect, Layer, Console } from "effect";
+import { BunContext, BunRuntime } from "@effect/platform-bun";
+
+// BunContext provides file system, path, and terminal access
+// Later steps add layers for config, tools, and providers
+const MainLayer = Layer.mergeAll(
+  BunContext.layer,      // Provides FileSystem, Path, Terminal, Command
+);
+
+// Create a simple program to test the runtime
+const main = Effect.gen(function* () {
+  yield* Console.log("✓ Runtime initialized successfully");
+  yield* Console.log("✓ All services are ready");
+});
+
+// Connect the program to services and run it
+main.pipe(
+  Effect.provide(MainLayer),           // Give the program access to services
+  Effect.tapErrorCause(Effect.logError), // Log detailed errors if anything fails
+  BunRuntime.runMain,                  // Run the program
+);
+```
+
+**What's happening here:**
+
+- `Layer.mergeAll` combines multiple service layers into one. This starter stack only includes `BunContext`; later steps add the remaining services.
+- `Effect.gen` is Effect's version of `async/await`. The `yield*` syntax runs operations in sequence.
+- `Effect.provide(MainLayer)` connects our program to all the services defined in `MainLayer`.
+- `tapErrorCause` intercepts errors and logs them with full detail (stack traces, context, etc.).
+- `BunRuntime.runMain` is the "execute" button—it turns our Effect description into actual work.
+
+### Step 3: Run It
+
+```bash
+bun run src/cli.ts
+```
+
+**Expected output:**
+```
+✓ Runtime initialized successfully
+✓ All services are ready
+```
+
+If you see this, congratulations! Your Effect runtime is working. All services initialized successfully.
+
+---
+
+<details>
+<summary><strong>Common Issues</strong></summary>
+
+| Problem | Likely Cause | Fix |
+|---------|--------------|-----|
+| "Cannot find module 'effect'" | Dependencies not installed | Run `bun install` |
+| "BunContext is not defined" | Wrong import | Check you're importing from `@effect/platform-bun` |
+| Type errors in Effect.gen | TypeScript version | Make sure you have TypeScript 5.9+ |
+
+</details>
+
+---
+
+<details>
+<summary><strong>Why This Design?</strong></summary>
+
+### Why Use Layers Instead of Direct Imports?
+
+You might wonder: why not just import services directly?
+
+```typescript
+// Direct approach (not recommended for Effect-based apps)
+import { readFile } from 'fs/promises';
+
+async function myFunction() {
+  const content = await readFile('file.txt');
+  return content;
+}
+```
+
+This works, but creates problems:
+
+1. **Testing is hard**: To test `myFunction`, you need to create actual files on disk
+2. **Changes ripple**: If you want to switch from `fs` to a different file system, you have to update every function
+3. **Hidden dependencies**: Looking at `myFunction`, you can't tell it needs file system access
+
+The Layer approach solves this:
+
+```typescript
+// Layer-based approach (recommended pattern)
+const myFunction = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem; // Explicit dependency
+  const content = yield* fs.readFileString('file.txt');
+  return content;
+});
+```
+
+Benefits:
+- **Easy testing**: Provide a mock FileSystem layer for tests
+- **Flexible**: Switch FileSystem implementation by changing one layer
+- **Clear dependencies**: The function signature shows it needs FileSystem
+
+### Why Effect Instead of Plain async/await?
+
+Effect provides structure that async/await doesn't:
+
+- **Dependency injection**: Built into the type system
+- **Error handling**: Errors are typed and explicit
+- **Resource management**: Cleanup happens automatically
+- **Composition**: Effects compose cleanly without callback hell
+
+Think of Effect as "async/await with superpowers." The learning curve is steeper, but you get reliability and composability in return.
+
+</details>
+
+---
+
+## What's Next
+
+Right now, your runtime boots successfully but doesn't do much. In the next steps, you'll add:
+
+- **Step 02**: Configuration to choose between AI providers
+- **Step 03**: A file reading tool
+- **Step 04**: The interactive chat loop
+
+Each addition is just another layer added to `MainLayer`.
+
+---
+
+<details>
+<summary><strong>Connections</strong></summary>
+
+**Sets up:**
+- [02 — Provider Configuration](/docs/build-series/02-provider-config) — You'll add `ConfigStack` to manage AI provider settings
+- [03 — First Tool](/docs/build-series/03-first-tool-readfile) — You'll add `ToolsStack` for file operations
+
+**Related concepts:**
+- [Effect: Layers and Dependency Injection](/docs/effect/layers-and-dependency-injection)
+- [Effect Fundamentals](/docs/effect/effect-fundamentals)
+
+</details>
+
+---
+
+## Source Code Reference
+
+The complete implementation is in:
+- `src/cli.ts` — Entry point that composes all layers
+- Future steps will add more service layers to combine here

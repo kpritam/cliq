@@ -1,0 +1,81 @@
+---
+sidebar_position: 2
+title: Services
+description: Reference for core Effect services exported by cliq.
+---
+
+Each service is an `Effect.Context.Tag` with a corresponding layer. Import the tag to request the service inside an effect.
+
+## ConfigService
+
+- **File**: `src/services/ConfigService.ts`
+- **Layer**: `ConfigService.layer`
+- **Methods**:
+  - `load: Effect<ConfigState>` — full configuration record.
+  - `current: Effect<{provider: Provider; model: string; apiKey?: string}>`
+  - `setProvider(provider: Provider, model: string): Effect<void>`
+
+```typescript title="src/services/ConfigService.ts"
+export class ConfigService extends Context.Tag("ConfigService")<
+  ConfigService,
+  {
+    readonly load: Effect.Effect<ConfigBuilder.Configuration>;
+    readonly current: Effect.Effect<{
+      readonly provider: Provider;
+      readonly model: string;
+      readonly apiKey?: string;
+    }>;
+    readonly setProvider: (provider: Provider, model: string) => Effect.Effect<void>;
+  }
+>() {}
+```
+
+## SessionStore
+
+- **File**: `src/persistence/SessionStore.ts`
+- **Layer**: `SessionStore.layer`
+- **Methods**:
+  - `createSession(directory: string, title: string): Effect<Session>`
+  - `getSession(projectID: string, sessionID: string): Effect<Option<Session>>`
+  - `saveSession(session: Session): Effect<void>`
+  - `saveMessage(message: StoredMessage): Effect<void>`
+  - `listMessages(sessionID: string): Effect<StoredMessage[]>`
+  - `listSessions: Effect<Session[]>`
+
+## ToolRegistry
+
+- **File**: `src/services/ToolRegistry.ts`
+- **Layer**: `ToolRegistry.layer`
+- **Methods**:
+  - `tools: Effect<ToolSet>` — map of tool identifiers to handlers.
+  - `listToolNames: Effect<ReadonlyArray<string>>`
+
+```typescript title="src/services/ToolRegistry.ts"
+export class ToolRegistry extends Context.Tag("ToolRegistry")<
+  ToolRegistry,
+  {
+    readonly tools: Effect.Effect<ToolSet>;
+    readonly listToolNames: Effect.Effect<ReadonlyArray<string>>;
+  }
+>() {}
+```
+
+## VercelAI
+
+- **File**: `src/services/VercelAI.ts`
+- **Layer**: `VercelAI.layer`
+- **Methods**:
+  - `getModel: Effect<LanguageModel>`
+  - `streamChat(request: StreamChatRequest<TOOLS>): Effect<StreamTextResult<TOOLS>>`
+
+## MessageService
+
+- **File**: `src/chat/MessageService.ts`
+- **Layer**: `MessageService.layer`
+- **Methods**:
+  - `sendMessage(input: string, sessionId: string): Effect<void>`
+
+:::tip Discover more services
+Search for `extends Context.Tag` in `src/` to locate other services such as `FileTools`, `SearchTools`, and `PathValidation`.
+:::
+

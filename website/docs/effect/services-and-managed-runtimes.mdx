@@ -1,0 +1,120 @@
+---
+title: Services & managed runtimes
+description: Structure services as Effect layers and run them inside managed runtimes for safety.
+---
+
+Cliq keeps stateful capabilities—storage, configuration, tool execution—behind services that return plain interfaces. This section shows how those services are implemented and why managed runtimes matter.
+
+## File-backed session store
+
+```typescript title="src/persistence/SessionStore.ts"
+export const layer = Layer.effect(
+  SessionStore,
+  Effect.gen(function* () {
+    const store = yield* FileKeyValueStore;
+
+    const storeSession = (session: Session) =>
+      serialize(session).pipe(
+        Effect.flatMap((json) => store.set(SESSION_NS, session.id, json)),
+      );
+
+    const storeMessage = (message: StoredMessage) =>
+      serialize(message).pipe(
+        Effect.flatMap((json) =>
+          store.set(messageNamespace(message.sessionID), message.id, json),
+        ),
+      );
+
+    const createSession = (directory: string, title: string) =>
+      Effect.all([timestamp(), generateID()]).pipe(
+        Effect.map(([now, id]) => ({
+          id,
+          projectID: hashProject(directory),
+          directory,
+          title,
+          version: "0.1.0",
+          time: { created: now, updated: now },
+        })),
+        Effect.tap(storeSession),
+      );
+
+    const listMessages = (sessionID: string) =>
+      Effect.gen(function* () {
+        const keys = yield* store.listKeys(messageNamespace(sessionID));
+        const messages = yield* Effect.forEach(keys, (key) =>
+          Effect.gen(function* () {
+            const maybeMessage = yield* store.get(messageNamespace(sessionID), key);
+            const json = Option.getOrThrow(maybeMessage);
+            return yield* deserialize<StoredMessage>(json);
+          }),
+        );
+        return messages.sort((a, b) => a.time.created - b.time.created);
+      });
+
+    return {
+      createSession,
+      getSession,
+      saveSession,
+      saveMessage: storeMessage,
+      listMessages,
+      listSessions,
+    };
+  }),
+);
+```
+
+- `serialize`/`deserialize` keep the API type-safe.
+- The service exposes only the operations consumers need; persistence details stay private.
+
+## Reactive configuration
+
+```typescript title="src/services/ConfigService.ts"
+const setProvider = (provider: Provider, model: string) =>
+  Effect.gen(function* () {
+    yield* Effect.all([
+      Persistence.saveProvider(store, provider),
+      Persistence.saveModel(store, model),
+    ]);
+    const env = yield* EnvConfig.load;
+    const newConfig = ConfigBuilder.build(env, provider, model);
+    yield* Ref.set(configRef, newConfig);
+  });
+```
+
+- A `Ref` holds the current configuration in memory.
+- Persisted state (`FileKeyValueStore`) and environment overrides merge deterministically.
+
+## Managed runtimes for tools
+
+```typescript title="src/services/ToolRegistry.ts"
+const fileToolsRuntime = ManagedRuntime.make(
+  FileToolsLayer.pipe(
+    Layer.provide(pathValidationStack),
+    Layer.provide(BunContext.layer),
+    Layer.orDie,
+  ),
+);
+
+const toolsMap = makeAllTools(
+  fileToolsRuntime,
+  searchToolsRuntime,
+  editToolsRuntime,
+  directoryToolsRuntime,
+);
+```
+
+- Each runtime bundles the dependencies a tool needs (filesystem, path validation, command execution).
+- Runtimes start fresh per invocation, preventing state leakage between tool calls.
+
+## Why it matters
+
+- **Isolation** — services declare dependencies at the boundary, so swapping implementations is straightforward.
+- **Determinism** — managed runtimes ensure initialisation/cleanup even when a tool fails mid-execution.
+- **Testability** — you can provide a fake layer (e.g., in-memory session store) without touching production code.
+
+## Source
+
+- `src/persistence/SessionStore.ts`
+- `src/services/ConfigService.ts`
+- `src/services/ToolRegistry.ts`
+

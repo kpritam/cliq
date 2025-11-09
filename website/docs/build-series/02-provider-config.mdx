@@ -1,0 +1,501 @@
+---
+id: 02-provider-config
+title: "02 → Provider configuration"
+description: Let users choose between different AI providers and save their preferences.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+## Overview
+
+### What you'll build
+
+In this step, you'll add the ability to switch between different AI providers (Anthropic, OpenAI, Google). You'll also build a simple storage system to remember the user's choice between sessions. Think of it like choosing your default browser—once you pick one, it stays selected until you change it.
+
+### Why it matters
+
+Different AI providers have different strengths:
+- Anthropic's Claude is great at following instructions and tool use
+- OpenAI's GPT-4 has broad knowledge and fast responses
+- Google's Gemini offers good performance at lower cost
+
+By making the provider switchable, users can experiment and choose what works best for them. Plus, if one provider has an outage, they can quickly switch to another.
+
+### Big picture
+
+You've set up the runtime (step 1). Now you're adding configuration management. This enables:
+- Reading API keys from environment variables
+- Switching providers with a `/model` command
+- Saving preferences so they persist between sessions
+
+After this step, you'll add the first tool (file reading), and then the chat interface.
+
+<details>
+<summary><strong>Core concepts (Effect-TS)</strong></summary>
+
+### Environment Variables: Configuration That Lives Outside Code
+
+**Environment variables** are settings stored outside your code—usually in a `.env` file or your shell. They're perfect for sensitive data like API keys because:
+- They don't get committed to git (keep them secret)
+- They're different for each person/environment
+- They're easy to change without modifying code
+
+Example `.env` file:
+```bash
+ANTHROPIC_API_KEY=sk-ant-your-key-here
+AI_PROVIDER=anthropic
+```
+
+### File-Based Storage: Saving Data Simply
+
+For this project, you save user preferences as JSON files in `~/.cliq/storage/`. This is simpler than a database and works well for small amounts of data.
+
+When a user changes their provider, the CLI:
+1. Save the choice to `~/.cliq/storage/config/provider.json`
+2. Update the in-memory configuration
+3. Use the new provider for future requests
+
+</details>
+
+---
+
+## Implementation
+
+### Step 1: Create Environment Configuration
+
+First, set up your API keys. Create a `.env` file in your project root:
+
+```bash title=".env"
+# Choose one or more providers (at least one required)
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
+
+# Optional: set defaults
+AI_PROVIDER=anthropic
+AI_MODEL=claude-sonnet-4-5-20251001
+AI_TEMPERATURE=0.2
+AI_MAX_STEPS=10
+```
+
+:::tip Getting API Keys
+- **Anthropic**: https://console.anthropic.com/
+- **OpenAI**: https://platform.openai.com/api-keys
+- **Google**: https://makersuite.google.com/app/apikey
+
+For testing, Anthropic's Claude Haiku is cost-effective at $0.25 per million input tokens.
+:::
+
+### Step 2: Build the File Storage System
+
+Create a simple key-value store that saves JSON files:
+
+```typescript title="src/persistence/FileKeyValueStore.ts"
+import { Effect, Layer, Context, Option } from "effect";
+import * as FileSystem from "@effect/platform/FileSystem";
+import * as Path from "@effect/platform/Path";
+
+// Define the service interface
+export class FileKeyValueStore extends Context.Tag("FileKeyValueStore")<
+  FileKeyValueStore,
+  {
+    readonly get: (namespace: string, key: string) => Effect.Effect<Option.Option<string>>;
+    readonly set: (namespace: string, key: string, value: string) => Effect.Effect<void>;
+    readonly remove: (namespace: string, key: string) => Effect.Effect<void>;
+  }
+>() {}
+
+// Create the service implementation
+export const layer = Layer.effect(
+  FileKeyValueStore,
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    
+    // Base directory: ~/.cliq/storage
+    const homeDir = process.env.HOME || process.env.USERPROFILE || ".";
+    const baseDir = path.join(homeDir, ".cliq", "storage");
+
+    // Helper: get directory for a namespace (e.g., "config" -> ~/.cliq/storage/config)
+    const namespaceDir = (namespace: string) => path.join(baseDir, namespace);
+    
+    // Helper: get file path for a key (e.g., "provider" -> ~/.cliq/storage/config/provider.json)
+    const keyPath = (namespace: string, key: string) =>
+      path.join(namespaceDir(namespace), `${key}.json`);
+
+    // Ensure a namespace directory exists
+    const ensureNamespace = (namespace: string) =>
+      fs.makeDirectory(namespaceDir(namespace), { recursive: true });
+
+    return {
+      // Read a value
+      get: (namespace: string, key: string) =>
+        Effect.gen(function* () {
+          const filePath = keyPath(namespace, key);
+          const exists = yield* fs.exists(filePath);
+          
+          if (!exists) {
+            return Option.none(); // File doesn't exist yet
+          }
+          
+          const content = yield* fs.readFileString(filePath);
+          return Option.some(content);
+        }),
+
+      // Write a value
+      set: (namespace: string, key: string, value: string) =>
+        Effect.gen(function* () {
+          yield* ensureNamespace(namespace);
+          yield* fs.writeFileString(keyPath(namespace, key), value);
+        }),
+
+      // Delete a value
+      remove: (namespace: string, key: string) =>
+        fs.remove(keyPath(namespace, key), { force: true }),
+    };
+  }),
+);
+```
+
+**What's happening here:**
+
+- The code defines a service called `FileKeyValueStore` using `Context.Tag`
+- The service exposes three methods: `get`, `set`, and `remove`
+- Files are stored in `~/.cliq/storage/` organized by namespace
+- `get` returns `Option.none()` if a file doesn't exist (safer than throwing errors)
+- `set` creates directories automatically if they don't exist
+
+### Step 3: Build the Config Service
+
+Now create a service that uses the storage to manage AI provider configuration:
+
+```typescript title="src/services/ConfigService.ts"
+import { Effect, Layer, Context, Option, Ref } from "effect";
+import { FileKeyValueStore } from "../persistence/FileKeyValueStore";
+
+// Supported AI providers
+export type Provider = "anthropic" | "openai" | "google";
+
+export interface Config {
+  provider: Provider;
+  model: string;
+  apiKey: string;
+  temperature?: number;
+  maxSteps?: number;
+}
+
+// Define the service
+export class ConfigService extends Context.Tag("ConfigService")<
+  ConfigService,
+  {
+    readonly load: Effect.Effect<Config>;
+    readonly setProvider: (provider: Provider, model: string) => Effect.Effect<void>;
+  }
+>() {}
+
+// Helper: load configuration from environment and storage
+const initializeConfig = (store: FileKeyValueStore.Type) =>
+  Effect.gen(function* () {
+    // Try to load saved provider preference
+    const savedProvider = yield* store.get("config", "provider").pipe(
+      Effect.flatMap((stored) =>
+        Effect.try({
+          try: () => Option.some(JSON.parse(stored)),
+          catch: () => Option.none<string>(),
+        }),
+      ),
+      Effect.catchAll(() => Effect.succeed(Option.none<string>())),
+    );
+
+    // Use saved provider or detect from environment
+    const provider = savedProvider.pipe(
+      Option.getOrElse(() => {
+        if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+        if (process.env.OPENAI_API_KEY) return "openai";
+        if (process.env.GOOGLE_API_KEY) return "google";
+        throw new Error("No AI provider configured. Set an API key in .env");
+      }),
+    );
+
+    // Get API key for the provider
+    const apiKey = (() => {
+      switch (provider) {
+        case "anthropic": return process.env.ANTHROPIC_API_KEY;
+        case "openai": return process.env.OPENAI_API_KEY;
+        case "google": return process.env.GOOGLE_API_KEY;
+      }
+    })();
+
+    if (!apiKey) {
+      throw new Error(`No API key found for provider: ${provider}`);
+    }
+
+    // Get model (use environment variable or provider default)
+    const model = process.env.AI_MODEL || (() => {
+      switch (provider) {
+        case "anthropic": return "claude-sonnet-4-5-20251001";
+        case "openai": return "gpt-4-turbo";
+        case "google": return "gemini-1.5-pro";
+      }
+    })();
+
+    return {
+      provider,
+      model,
+      apiKey,
+      temperature: Number(process.env.AI_TEMPERATURE) || 0.2,
+      maxSteps: Number(process.env.AI_MAX_STEPS) || 10,
+    };
+  });
+```
+
+### Environment Defaults + File Preferences Together
+
+Think of configuration as a handshake between two sources:
+- **Environment variables** provide the secure defaults (API keys, optional preferred model).
+- **FileKeyValueStore** captures user choices (current provider/model) so you can switch at runtime and remember it later.
+
+`initializeConfig` always starts with the saved preference when it’s valid; otherwise it falls back to whichever provider has a key in your environment. This keeps secrets out of storage while still remembering user-facing choices.
+
+```typescript title="src/services/ConfigService.ts"
+// Create the service
+export const layer = Layer.effect(
+  ConfigService,
+  Effect.gen(function* () {
+    const store = yield* FileKeyValueStore;
+    const initialConfig = yield* initializeConfig(store);
+    
+    // Store config in memory (mutable reference)
+    const configRef = yield* Ref.make(initialConfig);
+
+    return {
+      // Get current configuration
+      load: Ref.get(configRef),
+
+      // Update provider and save to disk
+      setProvider: (provider: Provider, model: string) =>
+        Effect.gen(function* () {
+          // Save to storage
+          yield* store.set("config", "provider", JSON.stringify(provider));
+          yield* store.set("config", "model", JSON.stringify(model));
+          
+          // Update in-memory config
+          const newConfig = yield* initializeConfig(store);
+          yield* Ref.set(configRef, newConfig);
+        }),
+    };
+  }),
+);
+```
+
+**What's happening here:**
+
+- `initializeConfig` reads the stored provider preference or detects from environment variables
+- `Ref.make(initialConfig)` creates a mutable reference to hold the current config in memory
+- `load` returns the current configuration
+- `setProvider` saves the new provider to disk and updates the in-memory reference
+
+### Step 4: Update the Main Layer
+
+Add the new services to your main layer:
+
+```typescript title="src/cli.ts"
+import { Effect, Layer, Console } from "effect";
+import { BunContext, BunRuntime } from "@effect/platform-bun";
+import { FileKeyValueStore } from "./persistence/FileKeyValueStore";
+import { ConfigService } from "./services/ConfigService";
+
+// Combine all service layers
+const MainLayer = Layer.mergeAll(
+  BunContext.layer,
+  FileKeyValueStore.layer,
+  ConfigService.layer,
+);
+
+// Test the configuration
+const main = Effect.gen(function* () {
+  const configService = yield* ConfigService;
+  const config = yield* configService.load;
+  
+  yield* Console.log("✓ Runtime initialized");
+  yield* Console.log(`✓ Using provider: ${config.provider}`);
+  yield* Console.log(`✓ Using model: ${config.model}`);
+});
+
+main.pipe(
+  Effect.provide(MainLayer),
+  Effect.tapErrorCause(Effect.logError),
+  BunRuntime.runMain,
+);
+```
+
+### Step 5: Test It
+
+```bash
+bun run src/cli.ts
+```
+
+**Expected output:**
+```
+✓ Runtime initialized
+✓ Using provider: anthropic
+✓ Using model: claude-sonnet-4-5-20251001
+```
+
+Try changing the `AI_PROVIDER` in your `.env` file and running again—you should see the change reflected.
+
+---
+
+<details>
+<summary><strong>Testing Your Implementation</strong></summary>
+
+Let's verify everything works:
+
+**Test 1: Default provider detection**
+```bash
+# Remove any saved preferences
+rm -rf ~/.cliq/storage
+
+# Run the CLI
+bun run src/cli.ts
+```
+
+It should automatically detect your provider based on which API key is set.
+
+**Test 2: Saved preferences persist**
+```typescript
+// Add this to your main function to test saving
+yield* configService.setProvider("openai", "gpt-4-turbo");
+yield* Console.log("✓ Saved new provider preference");
+```
+
+Run twice—the second time should use the saved preference.
+
+---
+
+## Common Issues
+
+| Problem | Likely Cause | Fix |
+|---------|--------------|-----|
+| "No AI provider configured" | Missing API key in `.env` | Add at least one API key |
+| Permission denied creating storage | ~/.cliq not writable | Check folder permissions |
+| Wrong provider selected | Old saved preference exists | Delete `~/.cliq/storage/config/` to reset |
+| Type errors in Config | Missing imports | Import `Option` from "effect" |
+
+</details>
+
+---
+
+<details>
+<summary><strong>Why This Design?</strong></summary>
+
+### Why Store Preferences in Files Instead of a Database?
+
+For this reference implementation, files are simpler:
+- No database setup required
+- Easy to inspect (just open the JSON file)
+- Good enough for small amounts of configuration data
+
+In a production system with many users, you might use a database. But for a local CLI tool used by one person, files work great.
+
+### Why Use Ref for In-Memory State?
+
+`Ref` is Effect's version of a mutable variable. It's safe to use across concurrent operations because:
+- Updates are atomic (no race conditions)
+- It integrates with Effect's type system
+- You can track all changes if needed
+
+Compare to a regular variable:
+
+```typescript
+// Regular variable (risky with concurrency)
+let config = initialConfig;
+config = newConfig; // Might get overwritten by concurrent update
+
+// Ref (safe)
+const configRef = yield* Ref.make(initialConfig);
+yield* Ref.set(configRef, newConfig); // Atomic update
+```
+
+### Why Separate Environment Loading and Storage?
+
+This separation of concerns means:
+- Environment variables provide defaults and API keys (never stored on disk)
+- Storage saves user preferences (provider choice, model selection)
+- API keys never get written to storage (security)
+
+If someone shares their `~/.cliq/storage/` folder, they won't leak their API keys.
+
+</details>
+
+---
+
+## Provider Comparison
+
+<Tabs>
+  <TabItem value="anthropic" label="Anthropic (Claude)" default>
+    **Best for:** Tool use, following instructions precisely, coding tasks
+    
+    **Models:** 
+    - `claude-sonnet-4-5-20251001` (recommended, $3/M input tokens)
+    - `claude-haiku-4-5-20251015` (fastest, cheapest, $0.25/M input tokens)
+    
+    **Setup:** `ANTHROPIC_API_KEY=sk-ant-...`
+  </TabItem>
+  <TabItem value="openai" label="OpenAI (GPT-4)">
+    **Best for:** General knowledge, creative tasks, broad capabilities
+    
+    **Models:**
+    - `gpt-4-turbo` (balanced performance)
+    - `gpt-4` (highest capability)
+    
+    **Setup:** `OPENAI_API_KEY=sk-...`
+  </TabItem>
+  <TabItem value="google" label="Google (Gemini)">
+    **Best for:** Cost-effective, good performance
+    
+    **Models:**
+    - `gemini-1.5-pro` (high capability)
+    - `gemini-1.5-flash` (faster, cheaper)
+    
+    **Setup:** `GOOGLE_API_KEY=...`
+  </TabItem>
+</Tabs>
+
+---
+
+## What's Next
+
+Now that configuration works, you can:
+- Switch between providers easily
+- Save preferences that persist
+- Read API keys securely from environment
+
+Next, you'll build the first tool that the AI can actually use: reading files.
+
+---
+
+<details>
+<summary><strong>Connections</strong></summary>
+
+**Builds on:**
+- [01 — Bootstrap Runtime](/docs/build-series/01-bootstrap-runtime) — Uses the layer system you set up
+
+**Sets up:**
+- [03 — First Tool](/docs/build-series/03-first-tool-readfile) — Tools will use the configured provider
+- [04 — Agent Loop](/docs/build-series/04-agent-loop) — The `/model` command will use `setProvider`
+
+**Related concepts:**
+- [Effect: Services and Context](/docs/effect/services-and-managed-runtimes)
+
+</details>
+
+---
+
+## Source Code Reference
+
+The complete implementation is in:
+- `src/persistence/FileKeyValueStore.ts` — File-based storage
+- `src/services/ConfigService.ts` — Configuration management
+- `src/services/config/` — Additional config helpers (EnvConfig, ConfigBuilder, etc.)

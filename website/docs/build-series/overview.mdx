@@ -1,0 +1,99 @@
+---
+sidebar_position: 1
+title: Build Series Overview
+description: Build a working AI coding assistant step by step, learning how AI agents actually work under the hood.
+---
+
+# Build Series Overview
+
+This series walks you through building Cliq from scratch. Each step adds one feature, and by step 4 you'll have a working AI assistant you can chat with. The remaining steps add polish and advanced features.
+
+## What You'll Learn
+
+By the end of this series, you'll understand:
+
+- How AI agents use "tools" to interact with code
+- How to stream responses in real-time (like ChatGPT's typing effect)
+- How to safely let AI read and edit files
+- How to persist conversations across sessions
+- How to add your own custom tools
+
+## The Learning Path
+
+Each step builds on the previous ones:
+
+| Step | What You'll Build | Key Concepts |
+| --- | --- | --- |
+| 01 | **Bootstrap runtime** | Set up Effect layers and dependency injection |
+| 02 | **Provider config** | Switch between Anthropic, OpenAI, Google |
+| 03 | **Read file tool** | Let AI read files safely with validation |
+| 04 | **Agent loop** | Build the interactive chat interface |
+| 05 | **Streaming** | Show AI responses in real-time |
+| 06 | **Search tools** | Add file search by pattern and content |
+| 07 | **Edit with diff** | Let AI edit files with preview |
+| 08 | **Markdown** | Render formatted text in terminal |
+| 09 | **Sessions** | Save and load conversation history |
+| 10 | **Custom tools** | Add your own tool capabilities |
+| 11 | **Performance** | Optimize speed and resource usage |
+
+:::tip Learning Strategy
+**Steps 1-4** are the foundation—everything else builds on these. If you want a quick win, aim to complete step 4 first. You'll have a chatting agent, and you can take a break before adding the polish in steps 5-11.
+:::
+
+## How Each Step Works
+
+Every step follows the same structure:
+
+1. **Overview** — What you'll build, why it matters, and the big picture
+2. **Core Concepts** — New ideas explained in plain language
+3. **Implementation** — Code with explanations
+4. **Testing** — How to verify it works
+5. **Common Issues** — Troubleshooting tips
+6. **Why This Design** — Architectural decisions explained
+
+You don't need to memorize anything. Each step includes code you can copy and explanations to help you understand what's happening.
+
+## What You Need
+
+Before starting, make sure you have:
+
+- **Bun**: Bun ≥ 1.1 (required for the reference implementation)
+- **TypeScript knowledge**: You should be comfortable with TypeScript basics
+- **API key**: From Anthropic, OpenAI, or Google (examples highlight Anthropic)
+- **Code editor**: VS Code, Cursor, or your favorite editor
+- **Terminal**: Basic comfort with command line
+
+Don't worry if you're new to Effect-TS—the guide explains each concept as it appears.
+
+## How to Use This Series
+
+**Option 1: Follow along coding**
+- Start with step 01 and work through each step
+- Type the code yourself (helps with learning)
+- Run tests after each step to verify it works
+
+**Option 2: Read then build**
+- Read through all steps first to understand the big picture
+- Then come back and build it step by step
+- Useful if you want to see where things are going
+
+**Option 3: Cherry-pick features**
+- Already have a basic agent? Jump to specific steps
+- Each step references what it depends on
+- Good for adding specific features to your own projects
+
+## Getting Help
+
+If you get stuck:
+
+1. Check the **Common Issues** section in each step
+2. Look at the **Source Code Reference** to see the working implementation
+3. Review the **[Effect Deep Dive](/docs/effect/overview)** for Effect-TS patterns
+4. Check the **[Mechanics](/docs/mechanics/overview)** section for deeper explanations
+
+## Ready to Start?
+
+Head to **[Step 01: Bootstrap Runtime](./01-bootstrap-runtime)** to begin building your AI agent.
+
+The first step sets up the foundation—think of it as wiring up all the services before turning on the power. Once that's done, each subsequent step gets faster and more fun.
+
