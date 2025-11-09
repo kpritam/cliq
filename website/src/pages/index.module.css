@@ -84,9 +84,15 @@
   border-radius: 50%;
 }
 
-.terminalDot:nth-child(1) { background: #ef4444; }
-.terminalDot:nth-child(2) { background: #f59e0b; }
-.terminalDot:nth-child(3) { background: #10b981; }
+.terminalDot:nth-child(1) {
+  background: #ef4444;
+}
+.terminalDot:nth-child(2) {
+  background: #f59e0b;
+}
+.terminalDot:nth-child(3) {
+  background: #10b981;
+}
 
 .terminalBody {
   padding: 0;
@@ -101,17 +107,17 @@
   margin-bottom: 0.5rem;
 }
 
-.terminalPrompt { 
+.terminalPrompt {
   color: var(--ifm-color-primary);
   font-weight: var(--ifm-font-weight-medium);
 }
 
-.terminalCommand { 
+.terminalCommand {
   color: #7dd3fc;
   font-weight: var(--ifm-font-weight-medium);
 }
 
-.terminalOutput { 
+.terminalOutput {
   color: #94a3b8;
 }
 
@@ -151,7 +157,12 @@
   border: 1px solid var(--ifm-toc-border-color);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: var(--ifm-background-color);
-  font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    'DM Sans',
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
 }
 
 [data-theme='dark'] .featureCard {

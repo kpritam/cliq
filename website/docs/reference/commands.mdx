@@ -4,15 +4,14 @@ title: Commands
 description: Slash commands and shell shortcuts available in cliq.
 ---
 
-| Command | Description | Implementation |
-| --- | --- | --- |
-| `/help` | Show available commands and usage hints. | `src/chat/SlashCommandHandler.ts` |
+| Command  | Description                                   | Implementation                    |
+| -------- | --------------------------------------------- | --------------------------------- |
+| `/help`  | Show available commands and usage hints.      | `src/chat/SlashCommandHandler.ts` |
 | `/model` | Change provider and model (`provider:model`). | `src/chat/SlashCommandHandler.ts` |
-| `/exit` | Gracefully terminate the chat session. | `src/chat/SlashCommandHandler.ts` |
+| `/exit`  | Gracefully terminate the chat session.        | `src/chat/SlashCommandHandler.ts` |
 
 All commands run inside the same Effect runtime as messages, so they can call services or tools if needed.
 
 :::tip Add your own
 Follow the pattern in `SlashCommandHandler`: add the command to `SLASH_COMMANDS`, implement a handler, and branch on it in `handleSlashCommand`.
 :::
-

@@ -9,7 +9,6 @@ import { ConfigService } from "../services/ConfigService.js";
 import { ToolRegistry } from "../services/ToolRegistry.js";
 import { VercelAI } from "../services/VercelAI.js";
 import type { StoredMessage } from "../types/session.js";
-import { renderMarkdownToTerminal } from "../utils/markdown/index.js";
 import { buildSystemPrompt } from "./systemPrompt.js";
 import { presentToolCalls, presentToolResults } from "./ToolPresenter.js";
 import { UI } from "./ui/ChatUI.js";

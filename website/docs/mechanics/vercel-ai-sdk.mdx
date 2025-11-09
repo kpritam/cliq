@@ -10,15 +10,13 @@ description: Understand how cliq wraps the Vercel AI SDK to stream chat, execute
 ## Core flow
 
 ```typescript title="src/services/VercelAI.ts"
-const streamChat = <TOOLS extends ToolSet>(
-  request: StreamChatRequest<TOOLS>,
-) =>
+const streamChat = <TOOLS extends ToolSet>(request: StreamChatRequest<TOOLS>) =>
   Effect.gen(function* () {
     // Load configuration and model
-    const config = yield* configService.load;
-    const model = yield* getModel;
+    const config = yield* configService.load
+    const model = yield* getModel
 
-    const { messages, tools, maxSteps, temperature, onStepFinish } = request;
+    const { messages, tools, maxSteps, temperature, onStepFinish } = request
 
     return streamText({
       model,
@@ -30,8 +28,8 @@ const streamChat = <TOOLS extends ToolSet>(
       maxOutputTokens: config.maxTokens,
       providerOptions: normalizeProviderOptions(config) as never,
       onStepFinish,
-    });
-  });
+    })
+  })
 ```
 
 - **Model resolution** — `getModel` lazy-loads the provider-specific client via `createAnthropic`, `createOpenAI`, or `createGoogleGenerativeAI`.
@@ -43,11 +41,11 @@ const streamChat = <TOOLS extends ToolSet>(
 
 ```typescript title="src/services/VercelAI.ts"
 export interface StreamChatRequest<TOOLS extends ToolSet = ToolSet> {
-  readonly messages: ModelMessage[];
-  readonly tools: TOOLS;
-  readonly maxSteps?: number;
-  readonly temperature?: number;
-  readonly onStepFinish?: (step: StepResult<TOOLS>) => void;
+  readonly messages: ModelMessage[]
+  readonly tools: TOOLS
+  readonly maxSteps?: number
+  readonly temperature?: number
+  readonly onStepFinish?: (step: StepResult<TOOLS>) => void
 }
 ```
 
@@ -60,15 +58,17 @@ export interface StreamChatRequest<TOOLS extends ToolSet = ToolSet> {
 Inside `MessageService`:
 
 ```typescript title="src/chat/MessageService.ts"
-const assistantText = yield* handleChatStream(
-  messages,
-  tools,
-  {
-    maxSteps: config.maxSteps ?? 10,
-    temperature: config.temperature,
-  },
-  vercelAI,
-);
+const assistantText =
+  yield *
+  handleChatStream(
+    messages,
+    tools,
+    {
+      maxSteps: config.maxSteps ?? 10,
+      temperature: config.temperature,
+    },
+    vercelAI,
+  )
 ```
 
 `handleChatStream` calls `vercelAI.streamChat` and subscribes to the incremental output, keeping the CLI responsive.
@@ -84,4 +84,3 @@ const assistantText = yield* handleChatStream(
 - `src/services/VercelAI.ts`
 - `src/chat/MessageService.ts`
 - `src/services/ConfigService.ts`
-

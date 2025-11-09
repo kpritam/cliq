@@ -9,7 +9,7 @@ Cliq’s system prompt emphasises action over narration. It is generated dynamic
 
 ```typescript title="src/chat/systemPrompt.ts"
 export const buildSystemPrompt = (config: SystemPromptConfig): string => {
-  const { cwd, provider, model, maxSteps } = config;
+  const { cwd, provider, model, maxSteps } = config
 
   return `You are a helpful coding assistant with access to file system tools.
 
@@ -39,8 +39,8 @@ Guidelines:
 3. For edits, use editFile with clear oldString/newString pairs
 4. Respect the project structure and conventions
 5. Never access files outside the working directory
-`;
-};
+`
+}
 ```
 
 - Tool descriptions are generated from the registry, so adding/removing tools automatically updates the instructions.
@@ -72,4 +72,3 @@ graph TD
 - `src/chat/systemPrompt.ts`
 - `src/services/ConfigService.ts`
 - `src/services/ToolRegistry.ts`
-

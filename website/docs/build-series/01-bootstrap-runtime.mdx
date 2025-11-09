@@ -1,6 +1,6 @@
 ---
 id: 01-bootstrap-runtime
-title: "01 → Bootstrap the runtime"
+title: '01 → Bootstrap the runtime'
 description: Set up the Bun runtime and Effect-TS environment with the Filesystem/BunContext layer.
 ---
 
@@ -28,6 +28,7 @@ Right now, you have an empty project. After this step, you'll have a running pro
 Imagine you're building with LEGO. A **Layer** is like an instruction sheet that says "to build a car, you need wheels and a chassis." Effect reads these instructions and assembles the parts in the right order.
 
 In code terms, a Layer is a recipe for creating a service. For example:
+
 - The `StorageLayer` needs `FileSystem` to work
 - The `ConfigStack` needs `StorageLayer` (to save settings)
 - Effect automatically figures out the right order and initializes them
@@ -36,7 +37,7 @@ Here's the key insight: **Layers are just values**. You can test them, swap them
 
 ### Effect.provide: Giving Your Program What It Needs
 
-When you write a program like `Console.log("hello")`, you're creating a *description* of work. It doesn't actually run until you tell it to.
+When you write a program like `Console.log("hello")`, you're creating a _description_ of work. It doesn't actually run until you tell it to.
 
 But what if your program needs services like `ConfigService`? That's where `Effect.provide` comes in—it "provides" the services your program needs. Think of it like handing a carpenter their toolbox before they start building.
 
@@ -83,27 +84,27 @@ Create a basic TypeScript config:
 Create the entry point that combines all services:
 
 ```typescript title="src/cli.ts"
-import { Effect, Layer, Console } from "effect";
-import { BunContext, BunRuntime } from "@effect/platform-bun";
+import { Effect, Layer, Console } from 'effect'
+import { BunContext, BunRuntime } from '@effect/platform-bun'
 
 // BunContext provides file system, path, and terminal access
 // Later steps add layers for config, tools, and providers
 const MainLayer = Layer.mergeAll(
-  BunContext.layer,      // Provides FileSystem, Path, Terminal, Command
-);
+  BunContext.layer, // Provides FileSystem, Path, Terminal, Command
+)
 
 // Create a simple program to test the runtime
 const main = Effect.gen(function* () {
-  yield* Console.log("✓ Runtime initialized successfully");
-  yield* Console.log("✓ All services are ready");
-});
+  yield* Console.log('✓ Runtime initialized successfully')
+  yield* Console.log('✓ All services are ready')
+})
 
 // Connect the program to services and run it
 main.pipe(
-  Effect.provide(MainLayer),           // Give the program access to services
+  Effect.provide(MainLayer), // Give the program access to services
   Effect.tapErrorCause(Effect.logError), // Log detailed errors if anything fails
-  BunRuntime.runMain,                  // Run the program
-);
+  BunRuntime.runMain, // Run the program
+)
 ```
 
 **What's happening here:**
@@ -121,6 +122,7 @@ bun run src/cli.ts
 ```
 
 **Expected output:**
+
 ```
 ✓ Runtime initialized successfully
 ✓ All services are ready
@@ -133,11 +135,11 @@ If you see this, congratulations! Your Effect runtime is working. All services i
 <details>
 <summary><strong>Common Issues</strong></summary>
 
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| "Cannot find module 'effect'" | Dependencies not installed | Run `bun install` |
-| "BunContext is not defined" | Wrong import | Check you're importing from `@effect/platform-bun` |
-| Type errors in Effect.gen | TypeScript version | Make sure you have TypeScript 5.9+ |
+| Problem                       | Likely Cause               | Fix                                                |
+| ----------------------------- | -------------------------- | -------------------------------------------------- |
+| "Cannot find module 'effect'" | Dependencies not installed | Run `bun install`                                  |
+| "BunContext is not defined"   | Wrong import               | Check you're importing from `@effect/platform-bun` |
+| Type errors in Effect.gen     | TypeScript version         | Make sure you have TypeScript 5.9+                 |
 
 </details>
 
@@ -152,11 +154,11 @@ You might wonder: why not just import services directly?
 
 ```typescript
 // Direct approach (not recommended for Effect-based apps)
-import { readFile } from 'fs/promises';
+import { readFile } from 'fs/promises'
 
 async function myFunction() {
-  const content = await readFile('file.txt');
-  return content;
+  const content = await readFile('file.txt')
+  return content
 }
 ```
 
@@ -171,13 +173,14 @@ The Layer approach solves this:
 ```typescript
 // Layer-based approach (recommended pattern)
 const myFunction = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem; // Explicit dependency
-  const content = yield* fs.readFileString('file.txt');
-  return content;
-});
+  const fs = yield* FileSystem.FileSystem // Explicit dependency
+  const content = yield* fs.readFileString('file.txt')
+  return content
+})
 ```
 
 Benefits:
+
 - **Easy testing**: Provide a mock FileSystem layer for tests
 - **Flexible**: Switch FileSystem implementation by changing one layer
 - **Clear dependencies**: The function signature shows it needs FileSystem
@@ -213,10 +216,12 @@ Each addition is just another layer added to `MainLayer`.
 <summary><strong>Connections</strong></summary>
 
 **Sets up:**
+
 - [02 — Provider Configuration](/docs/build-series/02-provider-config) — You'll add `ConfigStack` to manage AI provider settings
 - [03 — First Tool](/docs/build-series/03-first-tool-readfile) — You'll add `ToolsStack` for file operations
 
 **Related concepts:**
+
 - [Effect: Layers and Dependency Injection](/docs/effect/layers-and-dependency-injection)
 - [Effect Fundamentals](/docs/effect/effect-fundamentals)
 
@@ -227,5 +232,6 @@ Each addition is just another layer added to `MainLayer`.
 ## Source Code Reference
 
 The complete implementation is in:
+
 - `src/cli.ts` — Entry point that composes all layers
 - Future steps will add more service layers to combine here

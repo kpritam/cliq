@@ -14,39 +14,39 @@ description: Explore the colour palette, frames, and presenters that keep the CL
 ```typescript title="src/chat/ui/ChatUI.ts"
 export const UI = {
   Colors: {
-    BORDER: chalk.hex("#4B5563"),
-    ACCENT: chalk.hex("#38BDF8"),
-    ACCENT_BRIGHT: chalk.hex("#7DD3FC"),
-    SECONDARY: chalk.hex("#E5E7EB"),
-    MUTED: chalk.hex("#9CA3AF"),
-    TOOL: chalk.hex("#A855F7"),
-    SUCCESS: chalk.hex("#34D399"),
-    ERROR: chalk.hex("#F87171"),
-    WARNING: chalk.hex("#FBBF24"),
-    DIFF_ADD: chalk.hex("#22C55E"),
-    DIFF_REMOVE: chalk.hex("#F87171"),
-    DIFF_CONTEXT: chalk.hex("#94A3B8"),
+    BORDER: chalk.hex('#4B5563'),
+    ACCENT: chalk.hex('#38BDF8'),
+    ACCENT_BRIGHT: chalk.hex('#7DD3FC'),
+    SECONDARY: chalk.hex('#E5E7EB'),
+    MUTED: chalk.hex('#9CA3AF'),
+    TOOL: chalk.hex('#A855F7'),
+    SUCCESS: chalk.hex('#34D399'),
+    ERROR: chalk.hex('#F87171'),
+    WARNING: chalk.hex('#FBBF24'),
+    DIFF_ADD: chalk.hex('#22C55E'),
+    DIFF_REMOVE: chalk.hex('#F87171'),
+    DIFF_CONTEXT: chalk.hex('#94A3B8'),
   },
   Icons: {
-    ASSISTANT: "🤖",
-    USER: "",
-    PROCESSING: "⟳",
-    CHANGES: "",
-    MARKDOWN: "",
-    SUCCESS: "✔",
-    ERROR: "✖",
-    WARNING: "⚠",
-    PREVIEW: "👁",
+    ASSISTANT: '🤖',
+    USER: '',
+    PROCESSING: '⟳',
+    CHANGES: '',
+    MARKDOWN: '',
+    SUCCESS: '✔',
+    ERROR: '✖',
+    WARNING: '⚠',
+    PREVIEW: '👁',
   },
   Separators: {
-    THIN: chalk.hex("#4B5563")("─".repeat(78)),
+    THIN: chalk.hex('#4B5563')('─'.repeat(78)),
   },
   indent: (text: string, spaces: number) =>
     text
-      .split("\n")
-      .map((line) => " ".repeat(spaces) + line)
-      .join("\n"),
-};
+      .split('\n')
+      .map((line) => ' '.repeat(spaces) + line)
+      .join('\n'),
+}
 ```
 
 - Colours match the rest of the CLI, making it easy to modify themes in one place.
@@ -57,24 +57,23 @@ export const UI = {
 ```typescript title="src/chat/MessageService.ts"
 const displayProcessing = () =>
   Console.log(
-    UI.Colors.BORDER("\n╭─ ") +
+    UI.Colors.BORDER('\n╭─ ') +
       UI.Colors.TOOL(`${UI.Icons.PROCESSING} `) +
-      UI.Colors.MUTED("Processing...") +
-      UI.Colors.BORDER(` ${"─".repeat(62)}`),
-  );
+      UI.Colors.MUTED('Processing...') +
+      UI.Colors.BORDER(` ${'─'.repeat(62)}`),
+  )
 
 const displayAssistantHeader = () =>
   Console.log(
-    "\n" +
-      UI.Colors.BORDER("╭─ ") +
+    '\n' +
+      UI.Colors.BORDER('╭─ ') +
       UI.Colors.ACCENT(`${UI.Icons.ASSISTANT} `) +
-      UI.Colors.ACCENT_BRIGHT("Assistant") +
-      " " +
-      UI.Colors.BORDER("─".repeat(66)),
-  );
+      UI.Colors.ACCENT_BRIGHT('Assistant') +
+      ' ' +
+      UI.Colors.BORDER('─'.repeat(66)),
+  )
 
-const displayComplete = () =>
-  Console.log(`${UI.Colors.BORDER(`╰${"─".repeat(78)}`)}\n`);
+const displayComplete = () => Console.log(`${UI.Colors.BORDER(`╰${'─'.repeat(78)}`)}\n`)
 ```
 
 - Frames bookend each response so tool output appears inside a consistent box.
@@ -84,19 +83,19 @@ const displayComplete = () =>
 
 ```typescript title="src/chat/ui/ToolResultPresenter.ts"
 export const displayToolResult = (toolName: string, result: ToolResult): void => {
-  const summary = formatToolResultSummary(result, toolName);
-  const icon = result?.error ? UI.Icons.ERROR : UI.Icons.SUCCESS;
-  const color = result?.error ? UI.Colors.ERROR : UI.Colors.SUCCESS;
+  const summary = formatToolResultSummary(result, toolName)
+  const icon = result?.error ? UI.Icons.ERROR : UI.Icons.SUCCESS
+  const color = result?.error ? UI.Colors.ERROR : UI.Colors.SUCCESS
 
   console.log(
-    UI.Colors.BORDER("  ") +
+    UI.Colors.BORDER('  ') +
       color(`${icon} `) +
       (result?.error ? UI.Colors.ERROR(summary) : UI.Colors.SECONDARY(summary)),
-  );
+  )
 
-  displayDetailedToolResult(result, toolName);
-  process.stdout.write("\n");
-};
+  displayDetailedToolResult(result, toolName)
+  process.stdout.write('\n')
+}
 ```
 
 - `formatToolResultSummary` condenses the payload into a single status line.
@@ -113,4 +112,3 @@ export const displayToolResult = (toolName: string, result: ToolResult): void =>
 - `src/chat/ui/ChatUI.ts`
 - `src/chat/ui/ToolResultPresenter.ts`
 - `src/chat/MessageService.ts`
-

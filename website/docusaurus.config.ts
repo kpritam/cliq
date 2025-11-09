@@ -1,6 +1,6 @@
-import {themes as prismThemes} from 'prism-react-renderer';
-import type {Config} from '@docusaurus/types';
-import type * as Preset from '@docusaurus/preset-classic';
+import { themes as prismThemes } from 'prism-react-renderer'
+import type { Config } from '@docusaurus/types'
+import type * as Preset from '@docusaurus/preset-classic'
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -29,7 +29,8 @@ const config: Config = {
       tagName: 'meta',
       attributes: {
         property: 'og:description',
-        content: 'Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS. Step-by-step tutorials with hands-on exercises.',
+        content:
+          'Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS. Step-by-step tutorials with hands-on exercises.',
       },
     },
     {
@@ -57,7 +58,8 @@ const config: Config = {
       tagName: 'meta',
       attributes: {
         name: 'twitter:description',
-        content: 'Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS.',
+        content:
+          'Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS.',
       },
     },
   ],
@@ -207,6 +209,6 @@ const config: Config = {
       additionalLanguages: ['bash', 'typescript', 'javascript', 'json'],
     },
   } satisfies Preset.ThemeConfig,
-};
+}
 
-export default config;
+export default config

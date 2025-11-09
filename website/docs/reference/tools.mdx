@@ -4,17 +4,17 @@ title: Tools
 description: Registered tool identifiers, parameters, and return payloads.
 ---
 
-| Identifier | Module | Parameters schema | Result schema | Notes |
-| --- | --- | --- | --- | --- |
-| `readFile` | `src/tools/FileTools.ts` | `{ filePath: string }` | `{ filePath: string; content: string }` | Validates path with `PathValidation`. |
-| `writeFile` | `src/tools/FileTools.ts` | `{ filePath: string; content: string }` | `{ filePath: string; size: number; created?: boolean; diff?: string; stats?: DiffStats }` | Computes diff and change stats. |
-| `fileExists` | `src/tools/FileTools.ts` | `{ filePath: string }` | `{ filePath: string; exists: boolean; type?: "file" \| "directory" \| "other" }` | Uses `fs.stat`. |
-| `renderMarkdown` | `src/tools/FileTools.ts` | `{ filePath: string; includeHtml?: boolean }` | `{ filePath: string; isMarkdown: boolean; content: string; plainText: string; metadata: MarkdownMeta }` | Parses headings, links, and code blocks. |
-| `glob` | `src/tools/SearchTools.ts` | `{ pattern: string; cwd?: string; dot?: boolean; absolute?: boolean; onlyFiles?: boolean; maxResults?: number }` | `{ pattern: string; matches: string[]; count: number; truncated: boolean; cwd: string }` | Uses `Bun.Glob`. |
-| `grep` | `src/tools/SearchTools.ts` | `{ pattern: string; isRegex?: boolean; includePatterns?: string[]; excludePatterns?: string[]; contextLines?: number; maxResults?: number; searchPath?: string }` | `{ pattern: string; isRegex: boolean; filesSearched: number; matches: GrepMatch[]; truncated: boolean }` | Executes `rg` via `Command`. |
-| `editFile` | `src/tools/EditTools.ts` | `{ filePath: string; oldString: string; newString: string; replaceAll?: boolean; preview?: boolean; force?: boolean }` | `{ success: boolean; path: string; size: number; diff: string; stats: ChangeStats; validation: ValidationResult; preview?: string; message?: string }` | Gates risky edits; returns diff previews. |
-| `previewEdit` | `src/tools/EditTools.ts` | `{ filePath: string; oldString: string; newString: string; replaceAll?: boolean }` | `{ path: string; diff: string; validation: ValidationResult; recommendation: "proceed" \| "review" \| "abort" }` | Provides dry-run preview. |
-| `listDirectories` | `src/tools/DirectoryTools.ts` | `{ path?: string; depth?: number }` | `{ path: string; entries: DirectoryEntry[] }` | Lists files/directories with metadata. |
+| Identifier        | Module                        | Parameters schema                                                                                                                                                 | Result schema                                                                                                                                          | Notes                                     |
+| ----------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `readFile`        | `src/tools/FileTools.ts`      | `{ filePath: string }`                                                                                                                                            | `{ filePath: string; content: string }`                                                                                                                | Validates path with `PathValidation`.     |
+| `writeFile`       | `src/tools/FileTools.ts`      | `{ filePath: string; content: string }`                                                                                                                           | `{ filePath: string; size: number; created?: boolean; diff?: string; stats?: DiffStats }`                                                              | Computes diff and change stats.           |
+| `fileExists`      | `src/tools/FileTools.ts`      | `{ filePath: string }`                                                                                                                                            | `{ filePath: string; exists: boolean; type?: "file" \| "directory" \| "other" }`                                                                       | Uses `fs.stat`.                           |
+| `renderMarkdown`  | `src/tools/FileTools.ts`      | `{ filePath: string; includeHtml?: boolean }`                                                                                                                     | `{ filePath: string; isMarkdown: boolean; content: string; plainText: string; metadata: MarkdownMeta }`                                                | Parses headings, links, and code blocks.  |
+| `glob`            | `src/tools/SearchTools.ts`    | `{ pattern: string; cwd?: string; dot?: boolean; absolute?: boolean; onlyFiles?: boolean; maxResults?: number }`                                                  | `{ pattern: string; matches: string[]; count: number; truncated: boolean; cwd: string }`                                                               | Uses `Bun.Glob`.                          |
+| `grep`            | `src/tools/SearchTools.ts`    | `{ pattern: string; isRegex?: boolean; includePatterns?: string[]; excludePatterns?: string[]; contextLines?: number; maxResults?: number; searchPath?: string }` | `{ pattern: string; isRegex: boolean; filesSearched: number; matches: GrepMatch[]; truncated: boolean }`                                               | Executes `rg` via `Command`.              |
+| `editFile`        | `src/tools/EditTools.ts`      | `{ filePath: string; oldString: string; newString: string; replaceAll?: boolean; preview?: boolean; force?: boolean }`                                            | `{ success: boolean; path: string; size: number; diff: string; stats: ChangeStats; validation: ValidationResult; preview?: string; message?: string }` | Gates risky edits; returns diff previews. |
+| `previewEdit`     | `src/tools/EditTools.ts`      | `{ filePath: string; oldString: string; newString: string; replaceAll?: boolean }`                                                                                | `{ path: string; diff: string; validation: ValidationResult; recommendation: "proceed" \| "review" \| "abort" }`                                       | Provides dry-run preview.                 |
+| `listDirectories` | `src/tools/DirectoryTools.ts` | `{ path?: string; depth?: number }`                                                                                                                               | `{ path: string; entries: DirectoryEntry[] }`                                                                                                          | Lists files/directories with metadata.    |
 
 Type definitions such as `DiffStats`, `GrepMatch`, and `DirectoryEntry` live alongside their modules.
 
@@ -29,7 +29,7 @@ Open each tool file to see the full schema definitions. They double as documenta
 - **Purpose:** Return the contents of a file inside the workspace.
 
 ```typescript
-const result = yield* fileTools.readFile({ filePath: "README.md" });
+const result = yield * fileTools.readFile({ filePath: 'README.md' })
 // → { filePath: "README.md", content: "...markdown..." }
 ```
 
@@ -38,10 +38,12 @@ const result = yield* fileTools.readFile({ filePath: "README.md" });
 - **Purpose:** Write new content and compute a diff against the previous version.
 
 ```typescript
-const result = yield* fileTools.writeFile({
-  filePath: "src/example.ts",
-  content: "export const demo = 1;\n",
-});
+const result =
+  yield *
+  fileTools.writeFile({
+    filePath: 'src/example.ts',
+    content: 'export const demo = 1;\n',
+  })
 // → diff + stats when changes occur
 ```
 
@@ -50,7 +52,7 @@ const result = yield* fileTools.writeFile({
 - **Purpose:** Check whether a path exists and classify its type.
 
 ```typescript
-const result = yield* fileTools.fileExists({ filePath: "website/docs" });
+const result = yield * fileTools.fileExists({ filePath: 'website/docs' })
 // → { filePath: "website/docs", exists: true, type: "directory" }
 ```
 
@@ -59,9 +61,11 @@ const result = yield* fileTools.fileExists({ filePath: "website/docs" });
 - **Purpose:** Parse markdown, return metadata, and optionally HTML.
 
 ```typescript
-const result = yield* fileTools.renderMarkdown({
-  filePath: "docs/build-series/overview.mdx",
-});
+const result =
+  yield *
+  fileTools.renderMarkdown({
+    filePath: 'docs/build-series/overview.mdx',
+  })
 // → headings, links, code block counts, plain text body
 ```
 
@@ -70,7 +74,7 @@ const result = yield* fileTools.renderMarkdown({
 - **Purpose:** Scan the workspace with Bun's glob implementation.
 
 ```typescript
-const result = yield* searchTools.glob({ pattern: "src/**/*.ts" });
+const result = yield * searchTools.glob({ pattern: 'src/**/*.ts' })
 // → sorted match list with truncation flag
 ```
 
@@ -79,11 +83,13 @@ const result = yield* searchTools.glob({ pattern: "src/**/*.ts" });
 - **Purpose:** Use ripgrep to find content with optional include/exclude patterns.
 
 ```typescript
-const result = yield* searchTools.grep({
-  pattern: "Effect.gen",
-  contextLines: 1,
-  maxResults: 20,
-});
+const result =
+  yield *
+  searchTools.grep({
+    pattern: 'Effect.gen',
+    contextLines: 1,
+    maxResults: 20,
+  })
 // → matches with surrounding context
 ```
 
@@ -92,11 +98,13 @@ const result = yield* searchTools.grep({
 - **Purpose:** Produce a diff and validation warnings without writing to disk.
 
 ```typescript
-const preview = yield* editTools.previewEdit({
-  filePath: "src/chat/ChatProgram.ts",
-  oldString: "Goodbye!",
-  newString: "See you soon!",
-});
+const preview =
+  yield *
+  editTools.previewEdit({
+    filePath: 'src/chat/ChatProgram.ts',
+    oldString: 'Goodbye!',
+    newString: 'See you soon!',
+  })
 // → { diff, validation, recommendation }
 ```
 
@@ -105,11 +113,13 @@ const preview = yield* editTools.previewEdit({
 - **Purpose:** Apply a replacement with gating and change statistics.
 
 ```typescript
-const result = yield* editTools.editFile({
-  filePath: "src/chat/ChatProgram.ts",
-  oldString: "Goodbye!",
-  newString: "See you soon!",
-});
+const result =
+  yield *
+  editTools.editFile({
+    filePath: 'src/chat/ChatProgram.ts',
+    oldString: 'Goodbye!',
+    newString: 'See you soon!',
+  })
 // → success flag, diff, stats; may return preview-only when validation warns
 ```
 
@@ -118,10 +128,11 @@ const result = yield* editTools.editFile({
 - **Purpose:** Enumerate directory entries with metadata (size, type, depth).
 
 ```typescript
-const result = yield* directoryTools.listDirectories({
-  path: "website/docs",
-  depth: 1,
-});
+const result =
+  yield *
+  directoryTools.listDirectories({
+    path: 'website/docs',
+    depth: 1,
+  })
 // → entries: [{ name, path, type, size, depth }, ...]
 ```
-

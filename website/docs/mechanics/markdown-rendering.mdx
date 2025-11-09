@@ -17,17 +17,17 @@ const renderMarkdown = ({
   includeHtml,
 }: Schema.Schema.Type<typeof RenderMarkdownParameters>) =>
   Effect.gen(function* () {
-    const resolved = yield* pathValidation.ensureWithinCwd(filePath);
-    const relPath = pathValidation.relativePath(resolved);
-    const content = yield* fs.readFileString(resolved);
+    const resolved = yield* pathValidation.ensureWithinCwd(filePath)
+    const relPath = pathValidation.relativePath(resolved)
+    const content = yield* fs.readFileString(resolved)
 
     // Handle non-markdown files gracefully
     if (!isMarkdownFile(resolved)) {
-      return createNonMarkdownResult(relPath, content);
+      return createNonMarkdownResult(relPath, content)
     }
 
     // Parse markdown and extract structure
-    const parsed = yield* Effect.promise(() => parseMarkdown(content));
+    const parsed = yield* Effect.promise(() => parseMarkdown(content))
 
     return {
       filePath: relPath,
@@ -39,8 +39,8 @@ const renderMarkdown = ({
         headings: parsed.metadata.headings,
         links: parsed.metadata.links,
         codeBlocks: parsed.metadata.codeBlocks.map((block) => ({
-          language: block.lang ?? "text",
-          lineCount: block.code.split("\n").length,
+          language: block.lang ?? 'text',
+          lineCount: block.code.split('\n').length,
         })),
         wordCount: parsed.metadata.wordCount,
         lineCount: parsed.metadata.lineCount,
@@ -50,8 +50,8 @@ const renderMarkdown = ({
           codeBlockCount: parsed.metadata.codeBlocks.length,
         },
       },
-    };
-  });
+    }
+  })
 ```
 
 - `parseMarkdown` returns `raw`, `plainText`, `html`, and detailed metadata.
@@ -61,55 +61,48 @@ const renderMarkdown = ({
 
 ```typescript title="src/utils/markdown/renderer.ts"
 // Convert markdown to colored terminal output
-export const renderMarkdownToTerminal = (
-  content: string,
-  maxWidth = 80,
-): string => {
-  const tokens = marked.lexer(content);
-  return renderTokensToTerminal(tokens, maxWidth);
-};
+export const renderMarkdownToTerminal = (content: string, maxWidth = 80): string => {
+  const tokens = marked.lexer(content)
+  return renderTokensToTerminal(tokens, maxWidth)
+}
 ```
 
 The `renderTokensToTerminal` function wraps paragraphs, colors headings, formats lists, and prints fenced code blocks with indentation:
 
 ```typescript title="src/utils/markdown/renderer.ts"
-const renderTokensToTerminal = (
-  tokens: Token[],
-  maxWidth: number,
-  indent = "",
-): string => {
-  const lines: string[] = [];
+const renderTokensToTerminal = (tokens: Token[], maxWidth: number, indent = ''): string => {
+  const lines: string[] = []
 
   for (const token of tokens) {
     switch (token.type) {
-      case "heading":
-        lines.push(TerminalColors.heading(`${indent}${"#".repeat(token.depth)} ${token.text}`));
-        lines.push("");
-        break;
-      case "paragraph": {
-        const wrapped = wrapText(token.text, maxWidth - indent.length);
-        lines.push(TerminalColors.text(addIndent(wrapped, indent)));
-        lines.push("");
-        break;
+      case 'heading':
+        lines.push(TerminalColors.heading(`${indent}${'#'.repeat(token.depth)} ${token.text}`))
+        lines.push('')
+        break
+      case 'paragraph': {
+        const wrapped = wrapText(token.text, maxWidth - indent.length)
+        lines.push(TerminalColors.text(addIndent(wrapped, indent)))
+        lines.push('')
+        break
       }
-      case "list":
-        lines.push(renderListToTerminal(token as Tokens.List, maxWidth, indent));
-        lines.push("");
-        break;
-      case "code":
-        lines.push(TerminalColors.codeBlock(`${indent}\`\`\`${token.lang || ""}`));
-        token.text.split("\n").forEach((codeLine) =>
-          lines.push(TerminalColors.code(`${indent}${codeLine}`)),
-        );
-        lines.push(TerminalColors.codeBlock(`${indent}\`\`\``));
-        lines.push("");
-        break;
+      case 'list':
+        lines.push(renderListToTerminal(token as Tokens.List, maxWidth, indent))
+        lines.push('')
+        break
+      case 'code':
+        lines.push(TerminalColors.codeBlock(`${indent}\`\`\`${token.lang || ''}`))
+        token.text
+          .split('\n')
+          .forEach((codeLine) => lines.push(TerminalColors.code(`${indent}${codeLine}`)))
+        lines.push(TerminalColors.codeBlock(`${indent}\`\`\``))
+        lines.push('')
+        break
       // ...other token cases...
     }
   }
 
-  return lines.join("\n").replace(/\n{3,}/g, "\n\n");
-};
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n')
+}
 ```
 
 - `wrapText` ensures paragraphs fit within `maxWidth`.
@@ -120,13 +113,13 @@ const renderTokensToTerminal = (
 
 ```typescript title="src/chat/ui/ToolResultPresenter.ts"
 if (
-  toolName === "readFile" &&
+  toolName === 'readFile' &&
   result?.content &&
-  result.filePath?.toLowerCase().endsWith(".md") &&
+  result.filePath?.toLowerCase().endsWith('.md') &&
   result.content.length < 2000
 ) {
-  const rendered = renderMarkdownToTerminal(result.content, 76);
-  console.log(UI.indent(rendered, 2));
+  const rendered = renderMarkdownToTerminal(result.content, 76)
+  console.log(UI.indent(rendered, 2))
 }
 ```
 
@@ -145,4 +138,3 @@ if (
 - `src/utils/markdown/index.ts`
 - `src/utils/markdown/renderer.ts`
 - `src/chat/ui/ToolResultPresenter.ts`
-

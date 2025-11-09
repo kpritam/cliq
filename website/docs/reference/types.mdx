@@ -8,52 +8,52 @@ description: Shared TypeScript interfaces used across cliq.
 
 ```typescript title="src/types/session.ts"
 export interface Session {
-  readonly id: string;
-  readonly projectID: string;
-  readonly directory: string;
-  readonly title: string;
-  readonly version: string;
+  readonly id: string
+  readonly projectID: string
+  readonly directory: string
+  readonly title: string
+  readonly version: string
   readonly time: {
-    readonly created: number;
-    readonly updated: number;
-  };
+    readonly created: number
+    readonly updated: number
+  }
 }
 
 export interface StoredMessage {
-  readonly id: string;
-  readonly sessionID: string;
-  readonly role: "user" | "assistant" | "system";
-  readonly content: string;
+  readonly id: string
+  readonly sessionID: string
+  readonly role: 'user' | 'assistant' | 'system'
+  readonly content: string
   readonly time: {
-    readonly created: number;
-  };
+    readonly created: number
+  }
 }
 ```
 
 ## Configuration
 
 ```typescript title="src/types/config.ts"
-export type Provider = "anthropic" | "openai" | "google";
+export type Provider = 'anthropic' | 'openai' | 'google'
 
 interface BaseConfig {
-  readonly model: string;
-  readonly temperature: number;
-  readonly maxTokens?: number;
-  readonly maxSteps?: number;
+  readonly model: string
+  readonly temperature: number
+  readonly maxTokens?: number
+  readonly maxSteps?: number
 }
 
 export interface AnthropicConfig extends BaseConfig {
-  readonly provider: "anthropic";
-  readonly apiKey?: string;
-  readonly options?: AnthropicOptions;
+  readonly provider: 'anthropic'
+  readonly apiKey?: string
+  readonly options?: AnthropicOptions
 }
 
-export type Config = AnthropicConfig | OpenAIConfig | GoogleConfig;
+export type Config = AnthropicConfig | OpenAIConfig | GoogleConfig
 
 export interface ProviderConfig {
-  readonly provider: Provider;
-  readonly model: string;
-  readonly apiKey?: string;
+  readonly provider: Provider
+  readonly model: string
+  readonly apiKey?: string
 }
 ```
 
@@ -64,4 +64,3 @@ Tool-specific result types (for example, `DiffStats`, `ValidationResult`, `GrepM
 :::tip Rely on exports
 Every shared type has a dedicated export. Instead of duplicating shapes in your extensions, import from `src/types/` so your code stays aligned with upstream changes.
 :::
-

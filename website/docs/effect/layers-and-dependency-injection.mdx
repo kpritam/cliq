@@ -11,33 +11,33 @@ Effect layers are cliq’s dependency injection system. Services declare what th
 export const layer = Layer.effect(
   ConfigService,
   Effect.gen(function* () {
-    const store = yield* FileKeyValueStore;
-    const initialConfig = yield* initializeConfig(store);
-    const configRef = yield* Ref.make(initialConfig);
+    const store = yield* FileKeyValueStore
+    const initialConfig = yield* initializeConfig(store)
+    const configRef = yield* Ref.make(initialConfig)
 
-    const load = Ref.get(configRef);
+    const load = Ref.get(configRef)
     const current = load.pipe(
       Effect.map((cfg) => ({
         provider: cfg.provider,
         model: cfg.model,
         apiKey: cfg.apiKey,
       })),
-    );
+    )
 
     const setProvider = (provider: Provider, model: string) =>
       Effect.gen(function* () {
         yield* Effect.all([
           Persistence.saveProvider(store, provider),
           Persistence.saveModel(store, model),
-        ]);
-        const env = yield* EnvConfig.load;
-        const newConfig = ConfigBuilder.build(env, provider, model);
-        yield* Ref.set(configRef, newConfig);
-      });
+        ])
+        const env = yield* EnvConfig.load
+        const newConfig = ConfigBuilder.build(env, provider, model)
+        yield* Ref.set(configRef, newConfig)
+      })
 
-    return { load, current, setProvider };
+    return { load, current, setProvider }
   }),
-);
+)
 ```
 
 - The layer returns a plain object, making it trivial to swap with a test double.
@@ -49,9 +49,7 @@ export const layer = Layer.effect(
 export const layer = Layer.effect(
   ToolRegistry,
   Effect.sync(() => {
-    const pathValidationStack = PathValidationLayer.pipe(
-      Layer.provide(BunContext.layer),
-    );
+    const pathValidationStack = PathValidationLayer.pipe(Layer.provide(BunContext.layer))
 
     const fileToolsRuntime = ManagedRuntime.make(
       FileToolsLayer.pipe(
@@ -59,11 +57,11 @@ export const layer = Layer.effect(
         Layer.provide(BunContext.layer),
         Layer.orDie,
       ),
-    );
+    )
 
     const searchToolsRuntime = ManagedRuntime.make(
       SearchToolsLayer.pipe(Layer.provide(BunContext.layer), Layer.orDie),
-    );
+    )
 
     const editToolsRuntime = ManagedRuntime.make(
       EditToolsLayer.pipe(
@@ -71,7 +69,7 @@ export const layer = Layer.effect(
         Layer.provide(BunContext.layer),
         Layer.orDie,
       ),
-    );
+    )
 
     const directoryToolsRuntime = ManagedRuntime.make(
       DirectoryToolsLayer.pipe(
@@ -79,21 +77,21 @@ export const layer = Layer.effect(
         Layer.provide(BunContext.layer),
         Layer.orDie,
       ),
-    );
+    )
 
     const toolsMap = makeAllTools(
       fileToolsRuntime,
       searchToolsRuntime,
       editToolsRuntime,
       directoryToolsRuntime,
-    );
+    )
 
     return {
       tools: Effect.succeed(toolsMap),
       listToolNames: Effect.succeed(Object.keys(toolsMap).sort()),
-    };
+    }
   }),
-);
+)
 ```
 
 - Each managed runtime gets the platform dependencies it needs.
@@ -114,7 +112,7 @@ const MainLayer = Layer.mergeAll(
   VercelStack,
   RegistryStack,
   MessageStack,
-);
+)
 ```
 
 - If a required layer is missing, TypeScript flags it immediately.
@@ -132,4 +130,3 @@ const MainLayer = Layer.mergeAll(
 - `src/services/ConfigService.ts`
 - `src/services/ToolRegistry.ts`
 - `src/tools/**/*`
-

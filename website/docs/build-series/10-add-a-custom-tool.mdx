@@ -1,6 +1,6 @@
 ---
 id: 10-add-a-custom-tool
-title: "10 → Add a custom tool"
+title: '10 → Add a custom tool'
 description: Create a bespoke tool module, register it with ToolRegistry, and expose it to the Vercel AI runtime.
 ---
 
@@ -24,36 +24,40 @@ Steps 03 and 06 built core tools; this step shows how to extend the toolbox clea
 <summary><strong>Core concepts (Effect-TS)</strong></summary>
 
 ### Reusable Schemas
+
 Define input/output with `@effect/schema`. It keeps adapters honest and helps the model understand tool parameters.
 
 ### Managed Runtimes
+
 `ManagedRuntime.make` wraps the layer stack so each tool executes with its dependencies available. This matches how `FileTools` and `SearchTools` are wired—consistency makes debugging easier.
 
 ### Path Safety
+
 Even custom tools should reuse `PathValidation`. If your tool reads or writes files, sand-box it the same way the built-in tools do.
+
 </details>
 
 ---
 
-
 ## Implementation
+
 ## Implementation
 
 ### Step 1: Define the tool module
 
 ```typescript title="src/tools/TodoScanTools.ts"
-import * as FileSystem from "@effect/platform/FileSystem";
-import * as Path from "@effect/platform/Path";
-import { Todo } from "effect/Schema"; // placeholder for other schemas you might export
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
-import { PathValidation } from "../services/PathValidation";
+import * as FileSystem from '@effect/platform/FileSystem'
+import * as Path from '@effect/platform/Path'
+import { Todo } from 'effect/Schema' // placeholder for other schemas you might export
+import * as Context from 'effect/Context'
+import * as Effect from 'effect/Effect'
+import * as Layer from 'effect/Layer'
+import * as Schema from 'effect/Schema'
+import { PathValidation } from '../services/PathValidation'
 
 const Parameters = Schema.Struct({
   directory: Schema.optional(Schema.String),
-});
+})
 
 const Result = Schema.Struct({
   directory: Schema.String,
@@ -64,61 +68,63 @@ const Result = Schema.Struct({
       text: Schema.String,
     }),
   ),
-});
+})
 
-export class TodoScanTools extends Context.Tag("TodoScanTools")<
+export class TodoScanTools extends Context.Tag('TodoScanTools')<
   TodoScanTools,
   {
     readonly todoScan: (
       params: Schema.Schema.Type<typeof Parameters>,
-    ) => Effect.Effect<Schema.Schema.Type<typeof Result>>;
+    ) => Effect.Effect<Schema.Schema.Type<typeof Result>>
   }
 >() {}
 
 export const layer = Layer.effect(
   TodoScanTools,
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const pathValidation = yield* PathValidation;
+    const fs = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
+    const pathValidation = yield* PathValidation
 
-    const todoScan = ({ directory = "." }: Schema.Schema.Type<typeof Parameters>) =>
+    const todoScan = ({ directory = '.' }: Schema.Schema.Type<typeof Parameters>) =>
       Effect.gen(function* () {
-        const resolvedDir = yield* pathValidation.ensureWithinCwd(directory);
-        const entries = yield* fs.readDirectory(resolvedDir);
+        const resolvedDir = yield* pathValidation.ensureWithinCwd(directory)
+        const entries = yield* fs.readDirectory(resolvedDir)
 
         const todos = yield* Effect.forEach(entries, (entry) =>
           Effect.gen(function* () {
-            const entryPath = path.join(resolvedDir, entry);
-            const stat = yield* fs.stat(entryPath).pipe(
-              Effect.catchAll(() => Effect.succeed<null>(null)),
-            );
-            if (!stat || stat.type !== "File") {
-              return Effect.succeed<readonly never[]>([]);
+            const entryPath = path.join(resolvedDir, entry)
+            const stat = yield* fs
+              .stat(entryPath)
+              .pipe(Effect.catchAll(() => Effect.succeed<null>(null)))
+            if (!stat || stat.type !== 'File') {
+              return Effect.succeed<readonly never[]>([])
             }
 
-            const content = yield* fs.readFileString(entryPath);
-            return content.split("\n").flatMap((line, index) =>
-              line.includes("TODO")
-                ? [{
-                    filePath: pathValidation.relativePath(entryPath),
-                    line: index + 1,
-                    text: line.trim(),
-                  }]
+            const content = yield* fs.readFileString(entryPath)
+            return content.split('\n').flatMap((line, index) =>
+              line.includes('TODO')
+                ? [
+                    {
+                      filePath: pathValidation.relativePath(entryPath),
+                      line: index + 1,
+                      text: line.trim(),
+                    },
+                  ]
                 : [],
-            );
+            )
           }),
-        ).pipe(Effect.map((chunks) => chunks.flat()));
+        ).pipe(Effect.map((chunks) => chunks.flat()))
 
         return {
           directory: pathValidation.relativePath(resolvedDir),
           todos,
-        } as const;
-      });
+        } as const
+      })
 
-    return { todoScan } as const;
+    return { todoScan } as const
   }),
-);
+)
 ```
 
 ### Step 2: Wire the adapter
@@ -133,16 +139,14 @@ export const makeAllTools = (
 ): ToolSet => ({
   // ...existing tool adapters...
   todoScan: tool({
-    description: "Scan a directory for TODO comments",
+    description: 'Scan a directory for TODO comments',
     inputSchema: z.object({
       directory: z.string().optional(),
     }),
     execute: (input) =>
-      todoToolsRuntime.runPromise(
-        Effect.flatMap(TodoScanTools, (tools) => tools.todoScan(input)),
-      ),
+      todoToolsRuntime.runPromise(Effect.flatMap(TodoScanTools, (tools) => tools.todoScan(input))),
   }),
-});
+})
 ```
 
 Adapters validate parameters with `zod` and execute the Effect inside the managed runtime.
@@ -156,7 +160,7 @@ const todoToolsRuntime = ManagedRuntime.make(
     Layer.provide(BunContext.layer),
     Layer.orDie,
   ),
-);
+)
 
 const toolsMap = makeAllTools(
   fileToolsRuntime,
@@ -164,7 +168,7 @@ const toolsMap = makeAllTools(
   editToolsRuntime,
   directoryToolsRuntime,
   todoToolsRuntime,
-);
+)
 ```
 
 Make sure `pathValidationStack` (or equivalent) is reused so your custom tool stays inside the sandbox.
@@ -173,7 +177,6 @@ Make sure `pathValidationStack` (or equivalent) is reused so your custom tool st
 
 <details>
 <summary><strong>Testing & Validation</strong></summary>
-
 
 1. Run the CLI and ask the assistant to call `todoScan`—it should return a list of TODO comments.
 2. Point the tool at a directory outside the repo (`../../`); it should fail with a path validation error.
@@ -187,13 +190,12 @@ Make sure `pathValidationStack` (or equivalent) is reused so your custom tool st
 <details>
 <summary><strong>Common Issues</strong></summary>
 
-
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| Tool can access files outside project | Forgot to provide `PathValidation.layer` | Provide the same validation stack used by core tools |
-| Schema validation fails | Parameters not matching `Schema.Struct` | Keep schemas in sync between tool and adapter |
-| Runtime re-initializes on every call | Creating new `ManagedRuntime` per invocation | Create runtime once in `ToolRegistry` and reuse |
-| Adapter not discovered | `makeAllTools` not merged into registry | Ensure `ToolRegistry` spreads the adapter map into `VercelAI` setup |
+| Problem                               | Likely Cause                                 | Fix                                                                 |
+| ------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
+| Tool can access files outside project | Forgot to provide `PathValidation.layer`     | Provide the same validation stack used by core tools                |
+| Schema validation fails               | Parameters not matching `Schema.Struct`      | Keep schemas in sync between tool and adapter                       |
+| Runtime re-initializes on every call  | Creating new `ManagedRuntime` per invocation | Create runtime once in `ToolRegistry` and reuse                     |
+| Adapter not discovered                | `makeAllTools` not merged into registry      | Ensure `ToolRegistry` spreads the adapter map into `VercelAI` setup |
 
 ---
 
@@ -202,15 +204,17 @@ Make sure `pathValidationStack` (or equivalent) is reused so your custom tool st
 <details>
 <summary><strong>Connections</strong></summary>
 
-
 **Builds on:**
+
 - [03 — First Tool](/docs/build-series/03-first-tool-readfile) — Shares the layer + adapter pattern
 - [06 — Search with Glob and Ripgrep](/docs/build-series/06-search-glob-grep) — Demonstrates additional tool stacks
 
 **Sets up:**
+
 - [11 — Performance & Concurrency](/docs/build-series/11-performance-and-concurrency) — Optimizes multiple managed runtimes
 
 **Related code:**
+
 - `src/tools/TodoScanTools.ts`
 - `src/services/ToolRegistry.ts`
 - `src/adapters/index.ts`

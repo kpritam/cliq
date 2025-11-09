@@ -13,29 +13,26 @@ description: How cliq computes diffs, tracks change stats, and renders them in t
 
 ```typescript title="src/utils/diff.ts"
 // Generate unified diff format
-export const computeDiff = (
-  original: string,
-  updated: string,
-  filePath: string,
-): string => Diff.createPatch(filePath, original, updated);
+export const computeDiff = (original: string, updated: string, filePath: string): string =>
+  Diff.createPatch(filePath, original, updated)
 
 // Calculate change statistics
 export const computeStats = (original: string, updated: string): DiffStats => {
-  const parts = Diff.diffLines(original, updated);
-  let added = 0;
-  let removed = 0;
+  const parts = Diff.diffLines(original, updated)
+  let added = 0
+  let removed = 0
 
   for (const part of parts) {
-    if (part.added) added += part.count ?? 0;
-    else if (part.removed) removed += part.count ?? 0;
+    if (part.added) added += part.count ?? 0
+    else if (part.removed) removed += part.count ?? 0
   }
 
   return {
     linesAdded: added,
     linesRemoved: removed,
     totalChanges: added + removed,
-  };
-};
+  }
+}
 ```
 
 - `computeDiff` produces a unified diff string consumed by the terminal presenter.
@@ -44,8 +41,8 @@ export const computeStats = (original: string, updated: string): DiffStats => {
 ## Tool responses
 
 ```typescript title="src/tools/EditTools.ts"
-const stats = computeStats(content, updated);
-const diff = computeDiff(content, updated, filePath);
+const stats = computeStats(content, updated)
+const diff = computeDiff(content, updated, filePath)
 
 return {
   success: true,
@@ -54,7 +51,7 @@ return {
   diff,
   stats,
   validation,
-};
+}
 ```
 
 - Preview responses reuse the same diff + stats but set `success: false` and include a recommendation.
@@ -64,17 +61,17 @@ return {
 
 ```typescript title="src/chat/ui/ToolResultPresenter.ts"
 export const displayEditDiff = (result: ToolResult, toolName: string): void => {
-  if (toolName !== "editFile" || !result?.diff) return;
+  if (toolName !== 'editFile' || !result?.diff) return
 
   console.log(
-    "\n" +
-      UI.Colors.BORDER("  ") +
+    '\n' +
+      UI.Colors.BORDER('  ') +
       UI.Colors.TOOL(`${UI.Icons.CHANGES} `) +
-      UI.Colors.MUTED("Changes"),
-  );
-  renderDiffBlock(result.diff);
-  displayChangeStats(result.stats as DiffStats);
-};
+      UI.Colors.MUTED('Changes'),
+  )
+  renderDiffBlock(result.diff)
+  displayChangeStats(result.stats as DiffStats)
+}
 ```
 
 - `renderDiffBlock` applies syntax colouring and indentation to the unified diff.
@@ -85,14 +82,13 @@ export const displayEditDiff = (result: ToolResult, toolName: string): void => {
 
 ```typescript title="src/chat/ui/presenters/DiffRenderer.ts"
 export const renderDiffBlock = (diff: string) => {
-  const lines = diff.split("\n");
+  const lines = diff.split('\n')
   for (const line of lines) {
-    if (line.startsWith("+")) console.log(UI.Colors.DIFF_ADD(`  ${line}`));
-    else if (line.startsWith("-"))
-      console.log(UI.Colors.DIFF_REMOVE(`  ${line}`));
-    else console.log(UI.Colors.DIFF_CONTEXT(`  ${line}`));
+    if (line.startsWith('+')) console.log(UI.Colors.DIFF_ADD(`  ${line}`))
+    else if (line.startsWith('-')) console.log(UI.Colors.DIFF_REMOVE(`  ${line}`))
+    else console.log(UI.Colors.DIFF_CONTEXT(`  ${line}`))
   }
-};
+}
 ```
 
 The renderer colours additions/removals and keeps context lines muted so the diff stays legible in the terminal.
@@ -110,4 +106,3 @@ The renderer colours additions/removals and keeps context lines muted so the dif
 - `src/tools/FileTools.ts`
 - `src/chat/ui/presenters/DiffRenderer.ts`
 - `src/chat/ui/ToolResultPresenter.ts`
-

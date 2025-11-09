@@ -1,6 +1,6 @@
 ---
 id: 03-first-tool-readfile
-title: "03 → First tool: readFile"
+title: '03 → First tool: readFile'
 description: Create the first tool the AI can use to read files from your project.
 ---
 
@@ -52,7 +52,7 @@ TypeScript types disappear when code runs. If the AI generates `filePath: 123` (
 ```typescript
 const ReadFileParameters = Schema.Struct({
   filePath: Schema.String,
-});
+})
 
 // If AI sends filePath: 123, validation fails with a clear error
 // If AI sends filePath: "test.txt", validation succeeds
@@ -63,6 +63,7 @@ This prevents cryptic errors and helps the AI fix its mistakes when it generates
 ### Path Validation: Security Boundaries
 
 Imagine the AI generates:
+
 - `filePath: "/etc/passwd"` (system file)
 - `filePath: "../../../secrets.env"` (escapes your project)
 - `filePath: "~/.ssh/id_rsa"` (your SSH key)
@@ -70,6 +71,7 @@ Imagine the AI generates:
 Should your agent read those? Probably not!
 
 **Path validation** enforces security:
+
 - All paths must be within your current working directory
 - No `../` escaping allowed
 - Symlinks can't bypass restrictions
@@ -94,59 +96,57 @@ bun add @effect/schema
 First, build a service that validates paths are safe:
 
 ```typescript title="src/services/PathValidation.ts"
-import { Effect, Layer, Context } from "effect";
-import * as Path from "@effect/platform/Path";
-import * as FileSystem from "@effect/platform/FileSystem";
+import { Effect, Layer, Context } from 'effect'
+import * as Path from '@effect/platform/Path'
+import * as FileSystem from '@effect/platform/FileSystem'
 
-export class PathValidation extends Context.Tag("PathValidation")<
+export class PathValidation extends Context.Tag('PathValidation')<
   PathValidation,
   {
-    readonly ensureWithinCwd: (filePath: string) => Effect.Effect<string>;
-    readonly relativePath: (absolutePath: string) => string;
+    readonly ensureWithinCwd: (filePath: string) => Effect.Effect<string>
+    readonly relativePath: (absolutePath: string) => string
   }
 >() {}
 
 export const layer = Layer.effect(
   PathValidation,
   Effect.gen(function* () {
-    const path = yield* Path.Path;
-    const fs = yield* FileSystem.FileSystem;
-    
+    const path = yield* Path.Path
+    const fs = yield* FileSystem.FileSystem
+
     // Get current working directory
-    const cwd = process.cwd();
+    const cwd = process.cwd()
 
     return {
       // Ensure a path is within the current working directory
       ensureWithinCwd: (filePath: string) =>
         Effect.gen(function* () {
           // Resolve to absolute path
-          const absolute = path.isAbsolute(filePath)
-            ? filePath
-            : path.join(cwd, filePath);
-          
+          const absolute = path.isAbsolute(filePath) ? filePath : path.join(cwd, filePath)
+
           // Resolve any .. or . in the path
-          const resolved = path.resolve(absolute);
-          
+          const resolved = path.resolve(absolute)
+
           // Check it's within cwd
           if (!resolved.startsWith(cwd)) {
             return yield* Effect.fail(
-              new Error(`Path traversal detected: ${filePath} is outside project directory`)
-            );
+              new Error(`Path traversal detected: ${filePath} is outside project directory`),
+            )
           }
-          
-          return resolved;
+
+          return resolved
         }),
 
       // Convert absolute path to relative (for display)
       relativePath: (absolutePath: string) => {
         if (absolutePath.startsWith(cwd)) {
-          return path.relative(cwd, absolutePath);
+          return path.relative(cwd, absolutePath)
         }
-        return absolutePath;
+        return absolutePath
       },
-    };
+    }
   }),
-);
+)
 ```
 
 **What's happening here:**
@@ -161,35 +161,37 @@ export const layer = Layer.effect(
 Now create the actual file reading tool:
 
 ```typescript title="src/tools/FileTools.ts"
-import { Effect, Layer, Context } from "effect";
-import { Schema } from "@effect/schema";
-import * as FileSystem from "@effect/platform/FileSystem";
-import { PathValidation } from "../services/PathValidation";
+import { Effect, Layer, Context } from 'effect'
+import { Schema } from '@effect/schema'
+import * as FileSystem from '@effect/platform/FileSystem'
+import { PathValidation } from '../services/PathValidation'
 
 // Input schema: what the tool accepts
 const ReadFileParameters = Schema.Struct({
   filePath: Schema.String.annotations({
-    title: "File Path",
-    description: "Path to the file to read (relative to project root, e.g., 'src/cli.ts' or 'package.json')",
+    title: 'File Path',
+    description:
+      "Path to the file to read (relative to project root, e.g., 'src/cli.ts' or 'package.json')",
   }),
-});
+})
 
 // Output schema: what the tool returns
 const ReadFileResult = Schema.Struct({
   filePath: Schema.String.annotations({
-    description: "The relative path that was read",
+    description: 'The relative path that was read',
   }),
   content: Schema.String.annotations({
-    description: "The complete file contents as a string",
+    description: 'The complete file contents as a string',
   }),
-});
+})
 
 // Define the service
-export class FileTools extends Context.Tag("FileTools")<
+export class FileTools extends Context.Tag('FileTools')<
   FileTools,
   {
-    readonly readFile: (params: Schema.Schema.Type<typeof ReadFileParameters>) => 
-      Effect.Effect<Schema.Schema.Type<typeof ReadFileResult>>;
+    readonly readFile: (
+      params: Schema.Schema.Type<typeof ReadFileParameters>,
+    ) => Effect.Effect<Schema.Schema.Type<typeof ReadFileResult>>
   }
 >() {}
 
@@ -197,33 +199,33 @@ export class FileTools extends Context.Tag("FileTools")<
 export const layer = Layer.effect(
   FileTools,
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const pathValidation = yield* PathValidation;
+    const fs = yield* FileSystem.FileSystem
+    const pathValidation = yield* PathValidation
 
     return {
       readFile: ({ filePath }) =>
         Effect.gen(function* () {
           // Validate the path is safe
-    const resolved = yield* pathValidation.ensureWithinCwd(filePath);
-          
+          const resolved = yield* pathValidation.ensureWithinCwd(filePath)
+
           // Check file exists
-          const exists = yield* fs.exists(resolved);
+          const exists = yield* fs.exists(resolved)
           if (!exists) {
-            return yield* Effect.fail(new Error(`File not found: ${filePath}`));
+            return yield* Effect.fail(new Error(`File not found: ${filePath}`))
           }
-          
+
           // Read the file
-    const content = yield* fs.readFileString(resolved);
+          const content = yield* fs.readFileString(resolved)
 
           // Return relative path and content
-    return {
-      filePath: pathValidation.relativePath(resolved),
-      content,
-    };
+          return {
+            filePath: pathValidation.relativePath(resolved),
+            content,
+          }
         }),
-    };
+    }
   }),
-);
+)
 
 // Export schemas for tool registration
 export const schemas = {
@@ -231,7 +233,7 @@ export const schemas = {
     parameters: ReadFileParameters,
     result: ReadFileResult,
   },
-};
+}
 ```
 
 **What's happening here:**
@@ -247,26 +249,26 @@ export const schemas = {
 The Vercel AI SDK needs tools in a specific format. Create an adapter:
 
 ```typescript title="src/adapters/FileToolAdapters.ts"
-import { tool } from "ai";
-import * as Effect from "effect/Effect";
-import type * as ManagedRuntime from "effect/ManagedRuntime";
-import { z } from "zod";
-import { FileTools } from "../tools/FileTools";
+import { tool } from 'ai'
+import * as Effect from 'effect/Effect'
+import type * as ManagedRuntime from 'effect/ManagedRuntime'
+import { z } from 'zod'
+import { FileTools } from '../tools/FileTools'
 
-export const makeFileToolsForVercel = (runtime: ManagedRuntime.ManagedRuntime<FileTools, never>) => {
+export const makeFileToolsForVercel = (
+  runtime: ManagedRuntime.ManagedRuntime<FileTools, never>,
+) => {
   return {
     readFile: tool({
-      description: "Read the contents of a file from the project directory",
+      description: 'Read the contents of a file from the project directory',
       inputSchema: z.object({
-        filePath: z.string().describe("The path to the file to read"),
+        filePath: z.string().describe('The path to the file to read'),
       }),
       execute: async ({ filePath }: { filePath: string }) =>
-        runtime.runPromise(
-          Effect.flatMap(FileTools, (tools) => tools.readFile({ filePath })),
-        ),
+        runtime.runPromise(Effect.flatMap(FileTools, (tools) => tools.readFile({ filePath }))),
     }),
-  };
-};
+  }
+}
 ```
 
 **What's happening here:**
@@ -280,16 +282,16 @@ export const makeFileToolsForVercel = (runtime: ManagedRuntime.ManagedRuntime<Fi
 Bring it all together in a registry:
 
 ```typescript title="src/services/ToolRegistry.ts"
-import { Effect, Layer, Context, ManagedRuntime } from "effect";
-import { FileTools } from "../tools/FileTools";
-import { PathValidation } from "./PathValidation";
-import { makeFileTools } from "../adapters/FileToolAdapters";
-import { BunContext } from "@effect/platform-bun";
+import { Effect, Layer, Context, ManagedRuntime } from 'effect'
+import { FileTools } from '../tools/FileTools'
+import { PathValidation } from './PathValidation'
+import { makeFileTools } from '../adapters/FileToolAdapters'
+import { BunContext } from '@effect/platform-bun'
 
-export class ToolRegistry extends Context.Tag("ToolRegistry")<
+export class ToolRegistry extends Context.Tag('ToolRegistry')<
   ToolRegistry,
   {
-    readonly tools: Effect.Effect<Record<string, any>>;
+    readonly tools: Effect.Effect<Record<string, any>>
   }
 >() {}
 
@@ -297,21 +299,18 @@ export const layer = Layer.effect(
   ToolRegistry,
   Effect.gen(function* () {
     // Create a runtime for file tools with its dependencies
-const fileToolsRuntime = ManagedRuntime.make(
-      FileTools.layer.pipe(
-        Layer.provide(PathValidation.layer),
-    Layer.provide(BunContext.layer),
-      )
-    );
+    const fileToolsRuntime = ManagedRuntime.make(
+      FileTools.layer.pipe(Layer.provide(PathValidation.layer), Layer.provide(BunContext.layer)),
+    )
 
     // Create the tools map
-    const toolsMap = makeFileTools(fileToolsRuntime);
+    const toolsMap = makeFileTools(fileToolsRuntime)
 
     return {
       tools: Effect.succeed(toolsMap),
-    };
+    }
   }),
-);
+)
 ```
 
 **What's happening here:**
@@ -325,11 +324,11 @@ const fileToolsRuntime = ManagedRuntime.make(
 Add the new services:
 
 ```typescript title="src/cli.ts"
-import { FileKeyValueStore } from "./persistence/FileKeyValueStore";
-import { ConfigService } from "./services/ConfigService";
-import { PathValidation } from "./services/PathValidation";
-import { FileTools } from "./tools/FileTools";
-import { ToolRegistry } from "./services/ToolRegistry";
+import { FileKeyValueStore } from './persistence/FileKeyValueStore'
+import { ConfigService } from './services/ConfigService'
+import { PathValidation } from './services/PathValidation'
+import { FileTools } from './tools/FileTools'
+import { ToolRegistry } from './services/ToolRegistry'
 
 const MainLayer = Layer.mergeAll(
   BunContext.layer,
@@ -338,19 +337,19 @@ const MainLayer = Layer.mergeAll(
   PathValidation.layer,
   FileTools.layer,
   ToolRegistry.layer,
-);
+)
 
 // Test the tool
 const main = Effect.gen(function* () {
-  const fileTools = yield* FileTools;
-  
+  const fileTools = yield* FileTools
+
   // Try reading package.json
-  const result = yield* fileTools.readFile({ filePath: "package.json" });
-  
-  yield* Console.log("✓ Successfully read file:");
-  yield* Console.log(`  Path: ${result.filePath}`);
-  yield* Console.log(`  Size: ${result.content.length} bytes`);
-});
+  const result = yield* fileTools.readFile({ filePath: 'package.json' })
+
+  yield* Console.log('✓ Successfully read file:')
+  yield* Console.log(`  Path: ${result.filePath}`)
+  yield* Console.log(`  Size: ${result.content.length} bytes`)
+})
 ```
 
 ### Step 7: Test It
@@ -360,6 +359,7 @@ bun run src/cli.ts
 ```
 
 **Expected output:**
+
 ```
 ✓ Successfully read file:
   Path: package.json
@@ -367,15 +367,17 @@ bun run src/cli.ts
 ```
 
 Try reading different files:
+
 ```typescript
-yield* fileTools.readFile({ filePath: "src/cli.ts" });
-yield* fileTools.readFile({ filePath: "./README.md" });
+yield * fileTools.readFile({ filePath: 'src/cli.ts' })
+yield * fileTools.readFile({ filePath: './README.md' })
 ```
 
 Try an invalid path to test validation:
+
 ```typescript
 // Should fail with "Path traversal detected"
-yield* fileTools.readFile({ filePath: "../../../etc/passwd" });
+yield * fileTools.readFile({ filePath: '../../../etc/passwd' })
 ```
 
 ---
@@ -383,12 +385,12 @@ yield* fileTools.readFile({ filePath: "../../../etc/passwd" });
 <details>
 <summary><strong>Common Issues</strong></summary>
 
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| "File not found" | Wrong relative path | Check you're running from project root |
-| "Path traversal detected" | Path goes outside project | Use relative paths within project |
-| Type errors on Schema | Missing @effect/schema | Run `bun add @effect/schema` |
-| Tool not registered | ToolRegistry not in MainLayer | Verify ToolRegistry.layer is added |
+| Problem                   | Likely Cause                  | Fix                                    |
+| ------------------------- | ----------------------------- | -------------------------------------- |
+| "File not found"          | Wrong relative path           | Check you're running from project root |
+| "Path traversal detected" | Path goes outside project     | Use relative paths within project      |
+| Type errors on Schema     | Missing @effect/schema        | Run `bun add @effect/schema`           |
+| Tool not registered       | ToolRegistry not in MainLayer | Verify ToolRegistry.layer is added     |
 
 </details>
 
@@ -400,6 +402,7 @@ yield* fileTools.readFile({ filePath: "../../../etc/passwd" });
 ### Why Return Relative Paths Instead of Absolute?
 
 Absolute paths like `/Users/yourname/projects/cliq/package.json` leak information:
+
 - Your username
 - Your directory structure
 - Potentially sensitive path details
@@ -411,13 +414,15 @@ Relative paths like `package.json` keep responses focused on the project structu
 Runtime validation catches AI mistakes early:
 
 **Without schemas:**
+
 ```typescript
 // AI sends: filePath: 123
-await readFile(123); // Runtime error: "fs.readFile expects string, got number"
+await readFile(123) // Runtime error: "fs.readFile expects string, got number"
 // Confusing error, AI might not understand how to fix it
 ```
 
 **With schemas:**
+
 ```typescript
 // Schema validation fails with clear message
 // Error: "Expected string at filePath, received number"
@@ -431,22 +436,26 @@ Clear error messages help the AI self-correct without human intervention.
 `ManagedRuntime` creates a reusable execution environment. Compare:
 
 **Without ManagedRuntime** (slow):
+
 ```typescript
 // Every tool call re-initializes services
 await Effect.runPromise(
-  tool.readFile(params).pipe(
-    Effect.provide(FileTools.layer),
-    Effect.provide(PathValidation.layer),
-    Effect.provide(BunContext.layer),
-  )
-);
+  tool
+    .readFile(params)
+    .pipe(
+      Effect.provide(FileTools.layer),
+      Effect.provide(PathValidation.layer),
+      Effect.provide(BunContext.layer),
+    ),
+)
 ```
 
 **With ManagedRuntime** (fast):
+
 ```typescript
 // Services initialize once, reuse for all calls
-const runtime = ManagedRuntime.make(allLayers);
-await runtime.runPromise(tool.readFile(params));
+const runtime = ManagedRuntime.make(allLayers)
+await runtime.runPromise(tool.readFile(params))
 ```
 
 Think of it like a database connection pool—you set it up once and reuse it, rather than reconnecting every time.
@@ -458,11 +467,13 @@ Think of it like a database connection pool—you set it up once and reuse it, r
 The current implementation is safe for local use but consider:
 
 **What's protected:**
+
 - ✅ Can't read files outside project directory
 - ✅ Can't follow symlinks out of project
 - ✅ Relative and absolute paths both validated
 
 **What's not protected (intentionally, for learning):**
+
 - ⚠️ No rate limiting (AI could read many files quickly)
 - ⚠️ No size limits (AI could read huge files)
 - ⚠️ No access logging (can't audit what was read)
@@ -476,6 +487,7 @@ For a production system, you'd add these protections. For a learning tool, the c
 ## What You've Learned
 
 At this point, you understand:
+
 - How AI tools work (request → validate → execute → return)
 - How to validate data at runtime with schemas
 - How to enforce security boundaries with path validation
@@ -489,14 +501,17 @@ These patterns repeat for every tool you'll build: search, edit, directory listi
 <summary><strong>Connections</strong></summary>
 
 **Builds on:**
+
 - [01 — Bootstrap Runtime](/docs/build-series/01-bootstrap-runtime) — Uses the layer system
 - [02 — Provider Configuration](/docs/build-series/02-provider-config) — Tool calls will use the configured provider
 
 **Sets up:**
+
 - [04 — Agent Loop](/docs/build-series/04-agent-loop) — The chat loop will let the AI call this tool
 - [06 — Search Tools](/docs/build-series/06-search-glob-grep) — Uses the same tool pattern
 
 **Related concepts:**
+
 - [Tool Execution Mechanics](/docs/mechanics/tool-execution)
 - [Vercel AI SDK Integration](/docs/mechanics/vercel-ai-sdk)
 
@@ -507,6 +522,7 @@ These patterns repeat for every tool you'll build: search, edit, directory listi
 ## Source Code Reference
 
 The complete implementation is in:
+
 - `src/tools/FileTools.ts` — Tool implementation and schemas
 - `src/services/PathValidation.ts` — Path security validation
 - `src/adapters/FileToolAdapters.ts` — Bridge to Vercel AI SDK

@@ -6,16 +6,16 @@ description: Environment variables and persisted keys used by cliq.
 
 ## Environment variables
 
-| Variable | Description | Default |
-| --- | --- | --- |
-| `ANTHROPIC_API_KEY` | API key for Anthropic models. | _required for Anthropic_ |
-| `OPENAI_API_KEY` | API key for OpenAI models. | optional |
-| `GOOGLE_API_KEY` | API key for Google Gemini models. | optional |
-| `AI_PROVIDER` | Preferred provider (`anthropic`, `openai`, `google`). | first available |
-| `AI_MODEL` | Default model identifier for the selected provider. | provider-specific |
-| `AI_TEMPERATURE` | Temperature applied to chat completions. | `0.2` |
-| `AI_MAX_STEPS` | Maximum tool steps per request. | `10` |
-| `AI_MAX_TOKENS` | Optional output token budget. | unset |
+| Variable            | Description                                           | Default                  |
+| ------------------- | ----------------------------------------------------- | ------------------------ |
+| `ANTHROPIC_API_KEY` | API key for Anthropic models.                         | _required for Anthropic_ |
+| `OPENAI_API_KEY`    | API key for OpenAI models.                            | optional                 |
+| `GOOGLE_API_KEY`    | API key for Google Gemini models.                     | optional                 |
+| `AI_PROVIDER`       | Preferred provider (`anthropic`, `openai`, `google`). | first available          |
+| `AI_MODEL`          | Default model identifier for the selected provider.   | provider-specific        |
+| `AI_TEMPERATURE`    | Temperature applied to chat completions.              | `0.2`                    |
+| `AI_MAX_STEPS`      | Maximum tool steps per request.                       | `10`                     |
+| `AI_MAX_TOKENS`     | Optional output token budget.                         | unset                    |
 
 Read and write logic lives in `src/services/ConfigService.ts`.
 
@@ -23,15 +23,14 @@ Read and write logic lives in `src/services/ConfigService.ts`.
 
 Stored under `~/.cliq/storage/`.
 
-| Namespace | Keys | Description |
-| --- | --- | --- |
-| `config` | `provider.json`, `model.json` | Current provider/model set via `/model`. |
-| `session` | `{sessionId}.json` | Session metadata (directory, title, timestamps). |
-| `message/{sessionId}` | `{messageId}.json` | Individual message entries for the session. |
+| Namespace             | Keys                          | Description                                      |
+| --------------------- | ----------------------------- | ------------------------------------------------ |
+| `config`              | `provider.json`, `model.json` | Current provider/model set via `/model`.         |
+| `session`             | `{sessionId}.json`            | Session metadata (directory, title, timestamps). |
+| `message/{sessionId}` | `{messageId}.json`            | Individual message entries for the session.      |
 
 Persistence uses `FileKeyValueStore` (`src/persistence/FileKeyValueStore.ts`).
 
 :::tip Rotate secrets safely
 Instead of editing files in `~/.cliq/storage/` by hand, use `/model` or update environment variables and restart the CLI. `ConfigService` will regenerate the combined configuration automatically.
 :::
-

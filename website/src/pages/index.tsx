@@ -1,16 +1,17 @@
-import {useEffect, useRef, type ReactNode} from 'react';
-import Link from '@docusaurus/Link';
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import Layout from '@theme/Layout';
-import Heading from '@theme/Heading';
+import { useEffect, useRef, type ReactNode } from 'react'
+import Link from '@docusaurus/Link'
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import Layout from '@theme/Layout'
+import Heading from '@theme/Heading'
 
-import styles from './index.module.css';
+import styles from './index.module.css'
 
 const episodes = [
   {
     number: 'Ep 1',
     title: 'Bootstrap the Runtime',
-    description: 'Set up Effect-TS layers, Bun context, and dependency injection to create a composable foundation.',
+    description:
+      'Set up Effect-TS layers, Bun context, and dependency injection to create a composable foundation.',
     duration: '15 min',
     level: 'Beginner',
     link: '/docs/build-series/01-bootstrap-runtime',
@@ -18,7 +19,8 @@ const episodes = [
   {
     number: 'Ep 2',
     title: 'Provider Configuration',
-    description: 'Build a flexible config system supporting Anthropic, OpenAI, and Google with environment-based detection.',
+    description:
+      'Build a flexible config system supporting Anthropic, OpenAI, and Google with environment-based detection.',
     duration: '12 min',
     level: 'Beginner',
     link: '/docs/build-series/02-provider-config',
@@ -26,7 +28,8 @@ const episodes = [
   {
     number: 'Ep 3',
     title: 'First Tool: Read File',
-    description: 'Create your first tool with schema validation, path safety, and Error handling through Effects.',
+    description:
+      'Create your first tool with schema validation, path safety, and Error handling through Effects.',
     duration: '18 min',
     level: 'Intermediate',
     link: '/docs/build-series/03-first-tool-readfile',
@@ -34,7 +37,8 @@ const episodes = [
   {
     number: 'Ep 4',
     title: 'The Agent Loop',
-    description: 'Wire up the core orchestration loop connecting user input, LLM responses, and tool execution.',
+    description:
+      'Wire up the core orchestration loop connecting user input, LLM responses, and tool execution.',
     duration: '20 min',
     level: 'Intermediate',
     link: '/docs/build-series/04-agent-loop',
@@ -42,7 +46,8 @@ const episodes = [
   {
     number: 'Ep 5',
     title: 'Streaming Responses',
-    description: 'Implement real-time streaming UI with Vercel AI SDK for responsive, progressive output.',
+    description:
+      'Implement real-time streaming UI with Vercel AI SDK for responsive, progressive output.',
     duration: '16 min',
     level: 'Intermediate',
     link: '/docs/build-series/05-streaming',
@@ -50,7 +55,8 @@ const episodes = [
   {
     number: 'Ep 6',
     title: 'Search: Glob & Grep',
-    description: 'Add powerful file search and content matching using ripgrep with type-safe adapters.',
+    description:
+      'Add powerful file search and content matching using ripgrep with type-safe adapters.',
     duration: '14 min',
     level: 'Intermediate',
     link: '/docs/build-series/06-search-glob-grep',
@@ -66,7 +72,8 @@ const episodes = [
   {
     number: 'Ep 8',
     title: 'Markdown Rendering',
-    description: 'Parse and display beautiful markdown with syntax highlighting and metadata extraction.',
+    description:
+      'Parse and display beautiful markdown with syntax highlighting and metadata extraction.',
     duration: '12 min',
     level: 'Intermediate',
     link: '/docs/build-series/08-markdown-rendering',
@@ -82,7 +89,8 @@ const episodes = [
   {
     number: 'Ep 10',
     title: 'Add a Custom Tool',
-    description: 'Learn the pattern for creating your own tools and integrating them into the registry.',
+    description:
+      'Learn the pattern for creating your own tools and integrating them into the registry.',
     duration: '18 min',
     level: 'Advanced',
     link: '/docs/build-series/10-add-a-custom-tool',
@@ -90,43 +98,80 @@ const episodes = [
   {
     number: 'Ep 11',
     title: 'Performance & Concurrency',
-    description: 'Optimize with concurrent operations, caching strategies, and Effect-TS performance patterns.',
+    description:
+      'Optimize with concurrent operations, caching strategies, and Effect-TS performance patterns.',
     duration: '20 min',
     level: 'Advanced',
     link: '/docs/build-series/11-performance-and-concurrency',
   },
-];
+]
 
 const features = [
-  { icon: '🔄', title: 'Prompt Orchestration', description: 'Master multi-turn conversations with context management and streaming responses' },
-  { icon: '🛠️', title: 'Tool Execution', description: 'Build type-safe tools with schema validation and Effect-based error handling' },
-  { icon: '⚡', title: 'Message Streaming', description: 'Implement real-time UI updates with progressive rendering and live tool feedback' },
-  { icon: '🤖', title: 'LLM Integration', description: 'Swap between Anthropic, OpenAI, and Google providers with zero architectural changes' },
-  { icon: '✨', title: 'CLI UX Polish', description: 'Create beautiful terminal interfaces with colors, markdown rendering, and diff previews' },
-  { icon: '📦', title: 'Effect-TS Runtime', description: 'Compose layers, manage dependencies, and handle errors with pure functional patterns' },
-];
+  {
+    icon: '🔄',
+    title: 'Prompt Orchestration',
+    description: 'Master multi-turn conversations with context management and streaming responses',
+  },
+  {
+    icon: '🛠️',
+    title: 'Tool Execution',
+    description: 'Build type-safe tools with schema validation and Effect-based error handling',
+  },
+  {
+    icon: '⚡',
+    title: 'Message Streaming',
+    description: 'Implement real-time UI updates with progressive rendering and live tool feedback',
+  },
+  {
+    icon: '🤖',
+    title: 'LLM Integration',
+    description:
+      'Swap between Anthropic, OpenAI, and Google providers with zero architectural changes',
+  },
+  {
+    icon: '✨',
+    title: 'CLI UX Polish',
+    description:
+      'Create beautiful terminal interfaces with colors, markdown rendering, and diff previews',
+  },
+  {
+    icon: '📦',
+    title: 'Effect-TS Runtime',
+    description:
+      'Compose layers, manage dependencies, and handle errors with pure functional patterns',
+  },
+]
 
 const timelineSteps = [
-  { title: 'Watch', description: 'Follow step-by-step walkthroughs that explain every concept and design decision' },
-  { title: 'Code', description: 'Build the agent yourself with hands-on exercises and working code examples' },
-  { title: 'Run', description: 'Test your CLI agent immediately and see real-time tool execution in action' },
-];
+  {
+    title: 'Watch',
+    description: 'Follow step-by-step walkthroughs that explain every concept and design decision',
+  },
+  {
+    title: 'Code',
+    description: 'Build the agent yourself with hands-on exercises and working code examples',
+  },
+  {
+    title: 'Run',
+    description: 'Test your CLI agent immediately and see real-time tool execution in action',
+  },
+]
 
 function HomepageHeader() {
-  const playerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const container = playerRef.current;
-    if (!container) return;
+    const container = playerRef.current
+    if (!container) return
 
     // Clear previous embeds (in case of HMR in dev)
-    container.innerHTML = '';
+    container.innerHTML = ''
 
     // Add styles for Asciinema player sizing
-    const styleId = 'asciinema-player-styles';
+    const styleId = 'asciinema-player-styles'
     if (!document.getElementById(styleId)) {
-      const style = document.createElement('style');
-      style.id = styleId;
+      const style = document.createElement('style')
+      style.id = styleId
       style.textContent = `
         asciinema-player {
           width: 100% !important;
@@ -146,21 +191,21 @@ function HomepageHeader() {
           transform: scaleY(0.7) !important;
           transform-origin: top center !important;
         }
-      `;
-      document.head.appendChild(style);
+      `
+      document.head.appendChild(style)
     }
 
-    const script = document.createElement('script');
-    script.src = 'https://asciinema.org/a/gmYWqWQFCmspTa2FVgayHUnDr.js';
-    script.id = 'asciicast-gmYWqWQFCmspTa2FVgayHUnDr';
-    script.async = true;
-    container.appendChild(script);
+    const script = document.createElement('script')
+    script.src = 'https://asciinema.org/a/gmYWqWQFCmspTa2FVgayHUnDr.js'
+    script.id = 'asciicast-gmYWqWQFCmspTa2FVgayHUnDr'
+    script.async = true
+    container.appendChild(script)
 
     return () => {
       // Cleanup on unmount
-      container.innerHTML = '';
-    };
-  }, []);
+      container.innerHTML = ''
+    }
+  }, [])
 
   return (
     <header className={styles.heroBanner}>
@@ -169,7 +214,8 @@ function HomepageHeader() {
           Build your own <span className={styles.highlight}>CLI coding agent</span> from scratch
         </Heading>
         <p className={styles.heroSubtitle}>
-          A hands-on tutorial series for building an Effect-TS powered CLI agent with type-safe tool execution and streaming responses.
+          A hands-on tutorial series for building an Effect-TS powered CLI agent with type-safe tool
+          execution and streaming responses.
         </p>
         <div className={styles.heroActions}>
           <Link className="button button--primary button--lg" to="/docs/build-series/overview">
@@ -177,7 +223,8 @@ function HomepageHeader() {
           </Link>
           <Link
             className="button button--secondary button--lg"
-            href="https://github.com/kpritam/cliq">
+            href="https://github.com/kpritam/cliq"
+          >
             View on GitHub
           </Link>
         </div>
@@ -194,7 +241,7 @@ function HomepageHeader() {
         </div>
       </div>
     </header>
-  );
+  )
 }
 
 function WhatYoullLearn() {
@@ -204,7 +251,8 @@ function WhatYoullLearn() {
         What You'll Learn
       </Heading>
       <p className={styles.sectionSubtitle}>
-        Master the essential skills to build production-ready CLI agents with modern tooling and best practices
+        Master the essential skills to build production-ready CLI agents with modern tooling and
+        best practices
       </p>
       <div className="row">
         {features.map((feature) => (
@@ -220,7 +268,7 @@ function WhatYoullLearn() {
         ))}
       </div>
     </section>
-  );
+  )
 }
 
 function HowItWorks() {
@@ -231,7 +279,8 @@ function HowItWorks() {
           How It Works
         </Heading>
         <p className={styles.sectionSubtitle}>
-          A simple three-step process to master CLI agent development from fundamentals to production deployment
+          A simple three-step process to master CLI agent development from fundamentals to
+          production deployment
         </p>
         <div className={styles.timeline}>
           {timelineSteps.map((step, index) => (
@@ -246,7 +295,7 @@ function HowItWorks() {
         </div>
       </div>
     </section>
-  );
+  )
 }
 
 function SeriesOutline() {
@@ -274,7 +323,7 @@ function SeriesOutline() {
         ))}
       </div>
     </section>
-  );
+  )
 }
 
 function CTASection() {
@@ -285,7 +334,8 @@ function CTASection() {
           Ready to Build?
         </Heading>
         <p className={styles.ctaSubtitle}>
-          Start building your own AI-powered CLI agent today. Follow the step-by-step tutorial series.
+          Start building your own AI-powered CLI agent today. Follow the step-by-step tutorial
+          series.
         </p>
         <div className={styles.ctaActions}>
           <Link className="button button--primary button--lg" to="/docs/build-series/overview">
@@ -293,22 +343,24 @@ function CTASection() {
           </Link>
           <Link
             className="button button--secondary button--lg"
-            href="https://github.com/kpritam/cliq">
+            href="https://github.com/kpritam/cliq"
+          >
             Star on GitHub
           </Link>
         </div>
       </div>
     </section>
-  );
+  )
 }
 
 export default function Home(): ReactNode {
-  const {siteConfig} = useDocusaurusContext();
+  const { siteConfig } = useDocusaurusContext()
 
   return (
     <Layout
       title="Build Your Own CLI Coding Agent"
-      description="Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS. Step-by-step tutorials with hands-on exercises.">
+      description="Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS. Step-by-step tutorials with hands-on exercises."
+    >
       <HomepageHeader />
       <main>
         <WhatYoullLearn />
@@ -317,5 +369,5 @@ export default function Home(): ReactNode {
         <CTASection />
       </main>
     </Layout>
-  );
+  )
 }

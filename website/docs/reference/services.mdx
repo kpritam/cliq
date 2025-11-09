@@ -16,16 +16,16 @@ Each service is an `Effect.Context.Tag` with a corresponding layer. Import the t
   - `setProvider(provider: Provider, model: string): Effect<void>`
 
 ```typescript title="src/services/ConfigService.ts"
-export class ConfigService extends Context.Tag("ConfigService")<
+export class ConfigService extends Context.Tag('ConfigService')<
   ConfigService,
   {
-    readonly load: Effect.Effect<ConfigBuilder.Configuration>;
+    readonly load: Effect.Effect<ConfigBuilder.Configuration>
     readonly current: Effect.Effect<{
-      readonly provider: Provider;
-      readonly model: string;
-      readonly apiKey?: string;
-    }>;
-    readonly setProvider: (provider: Provider, model: string) => Effect.Effect<void>;
+      readonly provider: Provider
+      readonly model: string
+      readonly apiKey?: string
+    }>
+    readonly setProvider: (provider: Provider, model: string) => Effect.Effect<void>
   }
 >() {}
 ```
@@ -51,11 +51,11 @@ export class ConfigService extends Context.Tag("ConfigService")<
   - `listToolNames: Effect<ReadonlyArray<string>>`
 
 ```typescript title="src/services/ToolRegistry.ts"
-export class ToolRegistry extends Context.Tag("ToolRegistry")<
+export class ToolRegistry extends Context.Tag('ToolRegistry')<
   ToolRegistry,
   {
-    readonly tools: Effect.Effect<ToolSet>;
-    readonly listToolNames: Effect.Effect<ReadonlyArray<string>>;
+    readonly tools: Effect.Effect<ToolSet>
+    readonly listToolNames: Effect.Effect<ReadonlyArray<string>>
   }
 >() {}
 ```
@@ -78,4 +78,3 @@ export class ToolRegistry extends Context.Tag("ToolRegistry")<
 :::tip Discover more services
 Search for `extends Context.Tag` in `src/` to locate other services such as `FileTools`, `SearchTools`, and `PathValidation`.
 :::
-

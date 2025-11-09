@@ -15,11 +15,11 @@ const createSession = (directory: string, title: string) =>
       projectID: hashProject(directory),
       directory,
       title,
-      version: "0.1.0",
+      version: '0.1.0',
       time: { created: now, updated: now },
     })),
     Effect.tap(storeSession),
-  );
+  )
 ```
 
 - `Effect.all` runs timestamp + ID generation concurrently.
@@ -37,7 +37,7 @@ return streamText({
   maxOutputTokens: config.maxTokens,
   providerOptions: normalizeProviderOptions(config) as never,
   onStepFinish,
-});
+})
 ```
 
 - `stepCountIs` prevents runaway tool loops.
@@ -48,15 +48,15 @@ return streamText({
 ```typescript title="src/chat/MessageService.ts"
 const streamTextToConsole = (textStream: AsyncIterable<string>) =>
   Effect.promise(async () => {
-    let text = "";
+    let text = ''
     for await (const chunk of textStream) {
-      process.stdout.write(chunk);
-      text += chunk;
+      process.stdout.write(chunk)
+      text += chunk
     }
-    const rendered = renderMarkdownToTerminal(text, 76);
-    console.log("\n" + UI.indent(rendered, 2));
-    return text;
-  });
+    const rendered = renderMarkdownToTerminal(text, 76)
+    console.log('\n' + UI.indent(rendered, 2))
+    return text
+  })
 ```
 
 - Wrapping `AsyncIterable` consumption in an Effect keeps the generator linear and cancellable.
@@ -82,11 +82,12 @@ sequenceDiagram
 ## Resource lifecycles
 
 ```typescript title="src/chat/ChatProgram.ts"
-yield* Effect.acquireUseRelease(
-  acquireReadline,
-  ({ rl }) => runLoop(sessionId, messageService, rl),
-  (resource, _exit) => releaseReadline(resource),
-);
+yield *
+  Effect.acquireUseRelease(
+    acquireReadline,
+    ({ rl }) => runLoop(sessionId, messageService, rl),
+    (resource, _exit) => releaseReadline(resource),
+  )
 ```
 
 - Readline resources are reclaimed even on interrupts.
@@ -104,4 +105,3 @@ yield* Effect.acquireUseRelease(
 - `src/chat/MessageService.ts`
 - `src/persistence/SessionStore.ts`
 - `src/chat/ChatProgram.ts`
-

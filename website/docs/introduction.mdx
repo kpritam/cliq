@@ -95,19 +95,20 @@ Effect-TS is the key technology that makes Cliq predictable. Here's the core ide
 ```typescript
 // Traditional approach: side effects hidden
 async function readFile(path: string) {
-  return fs.readFile(path); // Might throw, might fail, unclear
+  return fs.readFile(path) // Might throw, might fail, unclear
 }
 
 // Effect approach: side effects explicit
 const readFile = (path: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem; // Explicit dependency
-    const content = yield* fs.readFileString(path); // Explicit operation
-    return content;
-  });
+    const fs = yield* FileSystem // Explicit dependency
+    const content = yield* fs.readFileString(path) // Explicit operation
+    return content
+  })
 ```
 
 With Effect:
+
 - **Dependencies are explicit**: You can see what each function needs
 - **Errors are typed**: You know what can go wrong
 - **Testing is easier**: You can swap dependencies with test versions
@@ -122,4 +123,3 @@ Ready to start? Head to the **[Build Series Overview](/docs/build-series/overvie
 Want to understand Effect-TS better first? Check out the **[Effect Deep Dive](/docs/effect/overview)**.
 
 Curious about specific parts? Browse the **[Mechanics](/docs/mechanics/overview)** section to see how individual pieces work.
-

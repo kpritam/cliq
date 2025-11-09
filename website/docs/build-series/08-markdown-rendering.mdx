@@ -1,6 +1,6 @@
 ---
 id: 08-markdown-rendering
-title: "08 → Markdown rendering"
+title: '08 → Markdown rendering'
 description: Parse markdown files and render them back to the terminal with structure and metadata.
 ---
 
@@ -24,19 +24,23 @@ This sits on top of the File tools stack from Steps 03 and 07. Search finds the 
 <summary><strong>Core concepts (Effect-TS)</strong></summary>
 
 ### Non-Markdown Fallback
+
 Binary files, JSON, or any non-Markdown content should return plain text plus simple statistics. The tool shouldn’t throw—just mark `isMarkdown: false` and keep going.
 
 ### Metadata Extraction
+
 `parseMarkdown` (implemented in `src/utils/markdown/index.ts`) returns structured data—headings, links, code blocks, counts. Surface those so the assistant can reason about docs without rendering the entire file.
 
 ### HTML Optionality
+
 Rendering HTML can be expensive and unnecessary for terminal output. Make it opt-in via `includeHtml`; otherwise keep responses lightweight.
+
 </details>
 
 ---
 
-
 ## Implementation
+
 ## Implementation
 
 ### Step 1: Handle non-Markdown content gracefully
@@ -55,14 +59,14 @@ const createNonMarkdownResult = (
     links: [],
     codeBlocks: [],
     wordCount: content.split(/\s+/).length,
-    lineCount: content.split("\n").length,
+    lineCount: content.split('\n').length,
     structure: {
       headingCount: 0,
       linkCount: 0,
       codeBlockCount: 0,
     },
   },
-});
+})
 ```
 
 ### Step 2: Parse Markdown and return metadata
@@ -70,16 +74,16 @@ const createNonMarkdownResult = (
 ```typescript title="src/tools/FileTools.ts"
 const renderMarkdown = (params: Schema.Schema.Type<typeof RenderMarkdownParameters>) =>
   Effect.gen(function* () {
-    const { filePath, includeHtml } = params;
-    const resolved = yield* pathValidation.ensureWithinCwd(filePath);
-    const relPath = pathValidation.relativePath(resolved);
-    const content = yield* fs.readFileString(resolved);
+    const { filePath, includeHtml } = params
+    const resolved = yield* pathValidation.ensureWithinCwd(filePath)
+    const relPath = pathValidation.relativePath(resolved)
+    const content = yield* fs.readFileString(resolved)
 
     if (!isMarkdownFile(resolved)) {
-      return createNonMarkdownResult(relPath, content);
+      return createNonMarkdownResult(relPath, content)
     }
 
-    const parsed = yield* Effect.promise(() => parseMarkdown(content));
+    const parsed = yield* Effect.promise(() => parseMarkdown(content))
 
     return {
       filePath: relPath,
@@ -91,8 +95,8 @@ const renderMarkdown = (params: Schema.Schema.Type<typeof RenderMarkdownParamete
         headings: parsed.metadata.headings,
         links: parsed.metadata.links,
         codeBlocks: parsed.metadata.codeBlocks.map((block) => ({
-          language: block.lang ?? "text",
-          lineCount: block.code.split("\n").length,
+          language: block.lang ?? 'text',
+          lineCount: block.code.split('\n').length,
         })),
         wordCount: parsed.metadata.wordCount,
         lineCount: parsed.metadata.lineCount,
@@ -102,17 +106,17 @@ const renderMarkdown = (params: Schema.Schema.Type<typeof RenderMarkdownParamete
           codeBlockCount: parsed.metadata.codeBlocks.length,
         },
       },
-    } as const;
-  });
+    } as const
+  })
 ```
 
 ### Step 3: Render Markdown to the terminal
 
 ```typescript title="src/utils/markdown/renderer.ts"
 export const renderMarkdownToTerminal = (content: string, maxWidth = 80): string => {
-  const tokens = marked.lexer(content);
-  return renderTokensToTerminal(tokens, maxWidth);
-};
+  const tokens = marked.lexer(content)
+  return renderTokensToTerminal(tokens, maxWidth)
+}
 ```
 
 In `MessageService` you already pass `renderMarkdownToTerminal` the streaming response (Step 05). Here, you’re preparing the same renderer for file previews.
@@ -121,7 +125,6 @@ In `MessageService` you already pass `renderMarkdownToTerminal` the streaming re
 
 <details>
 <summary><strong>Performance Notes</strong></summary>
-
 
 - Large docs: consider short-circuiting when `content.length` exceeds a few hundred KB and return a warning instead of full render.
 - HTML output: only include `parsed.html` when you explicitly need to hand it to a browser or external renderer.
@@ -133,7 +136,6 @@ In `MessageService` you already pass `renderMarkdownToTerminal` the streaming re
 
 <details>
 <summary><strong>Testing & Validation</strong></summary>
-
 
 1. Render a Markdown doc (`README.md`) and ensure headings, links, and code blocks show up in metadata.
 2. Render a plain text file (`package.json`); the tool should report `isMarkdown: false` and skip metadata.
@@ -147,13 +149,12 @@ In `MessageService` you already pass `renderMarkdownToTerminal` the streaming re
 <details>
 <summary><strong>Common Issues</strong></summary>
 
-
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| Rendering is slow for large files | Rendering full HTML/text for big docs | Short-circuit with a warning or paginate the output |
-| Special characters print as `?` | Terminal locale lacks Unicode support | Use UTF-8 encoding or strip styling in `renderMarkdownToTerminal` |
-| Code blocks lose indentation | Terminal width too narrow | Increase `maxWidth` or use monospace-friendly wrapping |
-| Metadata missing headings | `parseMarkdown` not recognizing front-matter | Ensure the parser is configured with front-matter plugins if needed |
+| Problem                           | Likely Cause                                 | Fix                                                                 |
+| --------------------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
+| Rendering is slow for large files | Rendering full HTML/text for big docs        | Short-circuit with a warning or paginate the output                 |
+| Special characters print as `?`   | Terminal locale lacks Unicode support        | Use UTF-8 encoding or strip styling in `renderMarkdownToTerminal`   |
+| Code blocks lose indentation      | Terminal width too narrow                    | Increase `maxWidth` or use monospace-friendly wrapping              |
+| Metadata missing headings         | `parseMarkdown` not recognizing front-matter | Ensure the parser is configured with front-matter plugins if needed |
 
 ---
 
@@ -162,20 +163,21 @@ In `MessageService` you already pass `renderMarkdownToTerminal` the streaming re
 <details>
 <summary><strong>Connections</strong></summary>
 
-
 **Builds on:**
+
 - [03 — First Tool](/docs/build-series/03-first-tool-readfile) — Uses `PathValidation` and file access
 - [05 — Streaming Output](/docs/build-series/05-streaming) — Shares the terminal renderer
 
 **Sets up:**
+
 - [09 — Session Persistence](/docs/build-series/09-session-persistence) — Stores rendered messages in history
 - [11 — Performance & Concurrency](/docs/build-series/11-performance-and-concurrency) — Optimizes heavy rendering workloads
 
 **Related code:**
+
 - `src/tools/FileTools.ts`
 - `src/utils/markdown/index.ts`
 - `src/utils/markdown/renderer.ts`
 - `src/chat/MessageService.ts`
 
 </details>
-

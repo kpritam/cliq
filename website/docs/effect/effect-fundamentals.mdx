@@ -15,7 +15,7 @@ const handleChatStream = (
   vercelAI: VercelAIService,
 ) =>
   Effect.gen(function* () {
-    yield* displayProcessing();
+    yield* displayProcessing()
 
     const result = yield* vercelAI.streamChat({
       messages,
@@ -23,17 +23,17 @@ const handleChatStream = (
       maxSteps: config.maxSteps,
       temperature: config.temperature,
       onStepFinish: (step) => {
-        if (step.toolCalls?.length) presentToolCalls(step.toolCalls);
-        if (step.toolResults?.length) presentToolResults(step.toolResults);
+        if (step.toolCalls?.length) presentToolCalls(step.toolCalls)
+        if (step.toolResults?.length) presentToolResults(step.toolResults)
       },
-    });
+    })
 
-    yield* displayAssistantHeader();
-    const assistantText = yield* streamTextToConsole(result.textStream);
-    yield* displayComplete();
+    yield* displayAssistantHeader()
+    const assistantText = yield* streamTextToConsole(result.textStream)
+    yield* displayComplete()
 
-    return assistantText;
-  });
+    return assistantText
+  })
 ```
 
 - Each `yield*` unwraps an Effect, keeping asynchronous code linear.
@@ -44,14 +44,14 @@ const handleChatStream = (
 ```typescript title="src/chat/MessageService.ts"
 const streamTextToConsole = (textStream: AsyncIterable<string>) =>
   Effect.promise(async () => {
-    let text = "";
+    let text = ''
     for await (const textPart of textStream) {
-      text += textPart;
+      text += textPart
     }
-    const rendered = renderMarkdownToTerminal(text, 76);
-    console.log(UI.indent(rendered, 2));
-    return text;
-  });
+    const rendered = renderMarkdownToTerminal(text, 76)
+    console.log(UI.indent(rendered, 2))
+    return text
+  })
 ```
 
 - `Effect.promise` bridges promise-based APIs into the Effect runtime.
@@ -62,21 +62,21 @@ const streamTextToConsole = (textStream: AsyncIterable<string>) =>
 ```typescript title="src/chat/MessageService.ts"
 const sendMessage = (input: string, sessionId: string) =>
   Effect.gen(function* () {
-    const config = yield* configService.load;
-    const tools = yield* toolRegistry.tools;
+    const config = yield* configService.load
+    const tools = yield* toolRegistry.tools
 
-    const userMessage = createUserMessage(input, sessionId);
-    yield* sessionStore.saveMessage(userMessage);
+    const userMessage = createUserMessage(input, sessionId)
+    yield* sessionStore.saveMessage(userMessage)
 
-    const history = yield* sessionStore.listMessages(sessionId);
+    const history = yield* sessionStore.listMessages(sessionId)
     const systemPrompt = buildSystemPrompt({
       cwd: process.cwd(),
       provider: config.provider,
       model: config.model,
       maxSteps: config.maxSteps ?? 10,
-    });
+    })
 
-    const messages = buildMessages(history, systemPrompt);
+    const messages = buildMessages(history, systemPrompt)
 
     const assistantText = yield* handleChatStream(
       messages,
@@ -86,14 +86,14 @@ const sendMessage = (input: string, sessionId: string) =>
         temperature: config.temperature,
       },
       vercelAI,
-    );
+    )
 
-    const trimmed = assistantText.trim();
+    const trimmed = assistantText.trim()
     if (trimmed.length > 0) {
-      const assistantMessage = createAssistantMessage(trimmed, sessionId);
-      yield* sessionStore.saveMessage(assistantMessage);
+      const assistantMessage = createAssistantMessage(trimmed, sessionId)
+      yield* sessionStore.saveMessage(assistantMessage)
     }
-  });
+  })
 ```
 
 - Effects request dependencies explicitly (`configService`, `toolRegistry`, `sessionStore`).
@@ -111,4 +111,3 @@ const sendMessage = (input: string, sessionId: string) =>
 - `src/chat/MessageService.ts`
 - `src/chat/ToolPresenter.ts`
 - `src/chat/systemPrompt.ts`
-

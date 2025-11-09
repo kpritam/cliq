@@ -51,7 +51,7 @@ const fileToolsRuntime = ManagedRuntime.make(
     Layer.provide(BunContext.layer),
     Layer.orDie, // Convert layer failures to defects
   ),
-);
+)
 
 // Adapt runtimes to Vercel AI SDK format
 const toolsMap = makeAllTools(
@@ -59,12 +59,12 @@ const toolsMap = makeAllTools(
   searchToolsRuntime,
   editToolsRuntime,
   directoryToolsRuntime,
-);
+)
 
 return {
   tools: Effect.succeed(toolsMap),
   listToolNames: Effect.succeed(Object.keys(toolsMap).sort()),
-};
+}
 ```
 
 - `ManagedRuntime.make` gives each service its own Effect environment.
@@ -86,7 +86,7 @@ export const makeAllTools = (
   editFile: makeEditFile(editToolsRuntime),
   previewEdit: makePreviewEdit(editToolsRuntime),
   listDirectories: makeListDirectories(directoryToolsRuntime),
-});
+})
 ```
 
 - Each adapter validates parameters with `@effect/schema`.
@@ -111,4 +111,3 @@ export const makeAllTools = (
 - `src/services/ToolRegistry.ts`
 - `src/adapters/index.ts`
 - `src/tools/**/*.ts`
-
