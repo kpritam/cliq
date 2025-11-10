@@ -8,7 +8,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { PathValidation } from "../services/PathValidation.js";
 import type { FileAccessDenied } from "../types/errors.js";
-import { EmptyPattern } from "../types/errors.js";
+import { CommandFailed, EmptyPattern } from "../types/errors.js";
 import { parseGrepOutput } from "./search/GrepParser.js";
 
 const DEFAULT_EXCLUDES = [
@@ -75,7 +75,10 @@ export class SearchTools extends Context.Tag("SearchTools")<
 			params: Schema.Schema.Type<typeof GrepParameters>,
 		) => Effect.Effect<
 			Schema.Schema.Type<typeof GrepSuccess>,
-			EmptyPattern | PlatformError.PlatformError | FileAccessDenied
+			| EmptyPattern
+			| PlatformError.PlatformError
+			| FileAccessDenied
+			| CommandFailed
 		>;
 	}
 >() {}
@@ -192,7 +195,20 @@ export const layer = Layer.effect(
 					maxResults,
 				);
 
-				const output = yield* runRgString(args, cwd).pipe(Effect.orDie);
+				const output = yield* runRgString(args, cwd).pipe(
+					Effect.catchAll((e) =>
+						Effect.fail(
+							new CommandFailed({
+								command: "rg",
+								args,
+								message:
+									e instanceof Error && typeof e.message === "string"
+										? e.message
+										: "ripgrep execution failed",
+							}),
+						),
+					),
+				);
 				const { matches, filesSearched } = parseGrepOutput(
 					output,
 					path,
@@ -207,7 +223,7 @@ export const layer = Layer.effect(
 					matches,
 					truncated: matches.length >= maxResults,
 				} as const;
-			}).pipe(Effect.orDie);
+			});
 
 		return {
 			glob,

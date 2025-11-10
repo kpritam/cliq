@@ -3,6 +3,10 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import {
+	DiffStats as DiffStatsSchema,
+	Validation as ValidationSchema,
+} from "../schemas/tools.js";
 import { PathValidation } from "../services/PathValidation.js";
 import { type FileAccessDenied, StringNotFound } from "../types/errors.js";
 import { computeDiff, computeStats } from "../utils/diff.js";
@@ -14,26 +18,16 @@ const EditParameters = Schema.Struct({
 	replaceAll: Schema.optional(Schema.Boolean),
 	preview: Schema.optional(Schema.Boolean),
 	force: Schema.optional(Schema.Boolean),
+	includeDiff: Schema.optional(Schema.Boolean),
 });
 
-const DiffStatsSchema = Schema.Struct({
-	linesAdded: Schema.Number,
-	linesRemoved: Schema.Number,
-	totalChanges: Schema.Number,
-});
-
-const Validation = Schema.Struct({
-	isValid: Schema.Boolean,
-	warnings: Schema.Array(Schema.String),
-	errors: Schema.Array(Schema.String),
-	changeStats: DiffStatsSchema,
-});
+const Validation = ValidationSchema;
 
 const EditSuccess = Schema.Struct({
 	success: Schema.Boolean,
 	path: Schema.String,
 	size: Schema.Number,
-	diff: Schema.String,
+	diff: Schema.optional(Schema.String),
 	stats: DiffStatsSchema,
 	validation: Validation,
 	message: Schema.optional(Schema.String),
@@ -166,6 +160,7 @@ export const layer = Layer.effect(
 			replaceAll = false,
 			preview,
 			force,
+			includeDiff = true,
 		}: Schema.Schema.Type<typeof EditParameters>) =>
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
@@ -180,7 +175,9 @@ export const layer = Layer.effect(
 
 				const validation = validateEdit(content, updated);
 				const stats = validation.changeStats;
-				const diff = computeDiff(content, updated, filePath);
+				const diff = includeDiff
+					? computeDiff(content, updated, filePath)
+					: undefined;
 				const relPath = pathValidation.relativePath(resolved);
 
 				const shouldGate =

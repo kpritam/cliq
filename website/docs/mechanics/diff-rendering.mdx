@@ -42,20 +42,32 @@ export const computeStats = (original: string, updated: string): DiffStats => {
 
 ```typescript title="src/tools/EditTools.ts"
 const stats = computeStats(content, updated)
-const diff = computeDiff(content, updated, filePath)
+const hasChanges = stats.totalChanges > 0
+const diff = hasChanges ? computeDiff(content, updated, filePath) : undefined
 
 return {
   success: true,
   path: relPath,
   size: updated.length,
-  diff,
-  stats,
+  diff,          // only present when changes detected
+  stats: hasChanges ? stats : undefined,
   validation,
 }
 ```
 
-- Preview responses reuse the same diff + stats but set `success: false` and include a recommendation.
-- `FileTools.writeFile` follows the same pattern, returning optional diff/stats when changes occur.
+- Preview responses reuse the same gating logic but set `success: false` and include a recommendation.
+- `FileTools.writeFile` performs identical gating. When `includeDiff` is `false` or there are no changes it omits both `diff` and `stats`:
+
+```typescript title="src/tools/FileTools.ts"
+if (includeDiff) {
+  const computedStats = computeStats(original, content)
+  const hasChanges = computedStats.totalChanges > 0
+  stats = hasChanges ? computedStats : undefined
+  diff = hasChanges ? computeDiff(original, content, relPath) : undefined
+}
+```
+
+This avoids noisy empty patches and keeps responses compact while still providing rich context when modifications occur.
 
 ## Terminal presentation
 

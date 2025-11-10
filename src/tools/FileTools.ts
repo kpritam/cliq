@@ -4,6 +4,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { DiffStats, MarkdownMetadata } from "../schemas/tools.js";
 import { PathValidation } from "../services/PathValidation.js";
 import type { FileAccessDenied } from "../types/errors.js";
 import { computeDiff, computeStats } from "../utils/diff.js";
@@ -39,26 +40,17 @@ export class FileTools extends Context.Tag("FileTools")<
 	}
 >() {}
 
-const ReadFileParameters = Schema.Struct({
-	filePath: Schema.String,
-});
-
+// Schemas
+const ReadFileParameters = Schema.Struct({ filePath: Schema.String });
 const ReadFileSuccess = Schema.Struct({
 	filePath: Schema.String,
 	content: Schema.String,
 });
-
 const WriteFileParameters = Schema.Struct({
 	filePath: Schema.String,
 	content: Schema.String,
+	includeDiff: Schema.optional(Schema.Boolean),
 });
-
-const DiffStats = Schema.Struct({
-	linesAdded: Schema.Number,
-	linesRemoved: Schema.Number,
-	totalChanges: Schema.Number,
-});
-
 const WriteFileSuccess = Schema.Struct({
 	filePath: Schema.String,
 	size: Schema.Number,
@@ -66,70 +58,30 @@ const WriteFileSuccess = Schema.Struct({
 	diff: Schema.optional(Schema.String),
 	stats: Schema.optional(DiffStats),
 });
-
-const FileExistsParameters = Schema.Struct({
-	filePath: Schema.String,
-});
-
+const FileExistsParameters = Schema.Struct({ filePath: Schema.String });
 const FileExistsSuccess = Schema.Struct({
 	filePath: Schema.String,
 	exists: Schema.Boolean,
 	type: Schema.optional(Schema.Literal("file", "directory", "other")),
 });
-
 const RenderMarkdownParameters = Schema.Struct({
 	filePath: Schema.String,
 	includeHtml: Schema.optional(Schema.Boolean),
 });
-
 const RenderMarkdownSuccess = Schema.Struct({
 	filePath: Schema.String,
 	isMarkdown: Schema.Boolean,
 	content: Schema.String,
 	plainText: Schema.String,
 	html: Schema.optional(Schema.String),
-	metadata: Schema.Struct({
-		headings: Schema.Array(
-			Schema.Struct({
-				level: Schema.Number,
-				text: Schema.String,
-			}),
-		),
-		links: Schema.Array(
-			Schema.Struct({
-				href: Schema.String,
-				text: Schema.String,
-			}),
-		),
-		codeBlocks: Schema.Array(
-			Schema.Struct({
-				language: Schema.String,
-				lineCount: Schema.Number,
-			}),
-		),
-		wordCount: Schema.Number,
-		lineCount: Schema.Number,
-		structure: Schema.Struct({
-			headingCount: Schema.Number,
-			linkCount: Schema.Number,
-			codeBlockCount: Schema.Number,
-		}),
-	}),
+	metadata: MarkdownMetadata,
 });
 
+// Helpers
 const mapFileType = (
 	type: FileSystem.File.Info["type"],
-): "file" | "directory" | "other" => {
-	switch (type) {
-		case "File":
-			return "file";
-		case "Directory":
-			return "directory";
-		default:
-			return "other";
-	}
-};
-
+): "file" | "directory" | "other" =>
+	type === "File" ? "file" : type === "Directory" ? "directory" : "other";
 const createNonMarkdownResult = (
 	filePath: string,
 	content: string,
@@ -144,11 +96,7 @@ const createNonMarkdownResult = (
 		codeBlocks: [],
 		wordCount: content.split(/\s+/).length,
 		lineCount: content.split("\n").length,
-		structure: {
-			headingCount: 0,
-			linkCount: 0,
-			codeBlockCount: 0,
-		},
+		structure: { headingCount: 0, linkCount: 0, codeBlockCount: 0 },
 	},
 });
 
@@ -164,41 +112,39 @@ export const layer = Layer.effect(
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
 				const content = yield* fs.readFileString(resolved);
-
-				return {
-					filePath: pathValidation.relativePath(resolved),
-					content,
-				};
+				return { filePath: pathValidation.relativePath(resolved), content };
 			});
 
 		const writeFile = ({
 			filePath,
 			content,
+			includeDiff = true,
 		}: Schema.Schema.Type<typeof WriteFileParameters>) =>
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
 				const relPath = pathValidation.relativePath(resolved);
-
 				const previousContent = yield* fs.readFileString(resolved).pipe(
 					Effect.map((data) => data as string | null),
 					Effect.catchAll(() => Effect.succeed(null as string | null)),
 				);
-
 				const original = previousContent ?? "";
-				const stats = computeStats(original, content);
-				const hasChanges = stats.totalChanges > 0;
-				const diff = hasChanges
-					? computeDiff(original, content, relPath)
-					: undefined;
-
+				let stats: ReturnType<typeof computeStats> | undefined;
+				let diff: string | undefined;
+				if (includeDiff) {
+					const computedStats = computeStats(original, content);
+					const hasChanges = computedStats.totalChanges > 0;
+					stats = hasChanges ? computedStats : undefined;
+					diff = hasChanges
+						? computeDiff(original, content, relPath)
+						: undefined;
+				}
 				yield* fs.writeFileString(resolved, content);
-
 				return {
 					filePath: relPath,
 					size: content.length,
 					created: previousContent === null,
 					diff,
-					stats: hasChanges ? stats : undefined,
+					stats,
 				};
 			});
 
@@ -208,18 +154,10 @@ export const layer = Layer.effect(
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
 				const relPath = pathValidation.relativePath(resolved);
-
 				const stat = yield* fs
 					.stat(resolved)
 					.pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-				if (stat === null) {
-					return {
-						filePath: relPath,
-						exists: false,
-					};
-				}
-
+				if (stat === null) return { filePath: relPath, exists: false };
 				return {
 					filePath: relPath,
 					exists: true,
@@ -235,13 +173,10 @@ export const layer = Layer.effect(
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
 				const relPath = pathValidation.relativePath(resolved);
 				const content = yield* fs.readFileString(resolved);
-
 				if (!isMarkdownFile(resolved)) {
 					return createNonMarkdownResult(relPath, content);
 				}
-
 				const parsed = yield* Effect.promise(() => parseMarkdown(content));
-
 				return {
 					filePath: relPath,
 					isMarkdown: true,
@@ -266,11 +201,6 @@ export const layer = Layer.effect(
 				};
 			});
 
-		return {
-			readFile,
-			writeFile,
-			fileExists,
-			renderMarkdown,
-		};
+		return { readFile, writeFile, fileExists, renderMarkdown };
 	}),
 );
