@@ -8,6 +8,8 @@ import { SessionStore } from "../persistence/SessionStore.js";
 import { ConfigService } from "../services/ConfigService.js";
 import { ToolRegistry } from "../services/ToolRegistry.js";
 import { VercelAI } from "../services/VercelAI.js";
+import { WorkspaceContext } from "../services/WorkspaceContext.js";
+import type { MessageNotFound, SessionNotFound } from "../types/errors.js";
 import type { StoredMessage } from "../types/session.js";
 import { buildSystemPrompt } from "./systemPrompt.js";
 import { presentToolCalls, presentToolResults } from "./ToolPresenter.js";
@@ -19,7 +21,10 @@ export class MessageService extends Context.Tag("MessageService")<
 		readonly sendMessage: (
 			input: string,
 			sessionId: string,
-		) => Effect.Effect<void, PlatformError.PlatformError>;
+		) => Effect.Effect<
+			void,
+			PlatformError.PlatformError | MessageNotFound | SessionNotFound
+		>;
 	}
 >() {}
 
@@ -132,6 +137,7 @@ export const layer = Layer.effect(
 		const configService = yield* ConfigService;
 		const toolRegistry = yield* ToolRegistry;
 		const vercelAI = yield* VercelAI;
+		const workspace = yield* WorkspaceContext;
 
 		const sendMessage = (input: string, sessionId: string) =>
 			Effect.gen(function* () {
@@ -144,7 +150,7 @@ export const layer = Layer.effect(
 				const history = yield* sessionStore.listMessages(sessionId);
 
 				const systemPrompt = buildSystemPrompt({
-					cwd: process.cwd(),
+					cwd: workspace.cwd,
 					provider: config.provider,
 					model: config.model,
 					maxSteps: config.maxSteps ?? 10,

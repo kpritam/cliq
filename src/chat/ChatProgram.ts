@@ -6,6 +6,7 @@ import { SessionStore } from "../persistence/SessionStore.js";
 import { ConfigService } from "../services/ConfigService.js";
 import { ToolRegistry } from "../services/ToolRegistry.js";
 import type { VercelAI } from "../services/VercelAI.js";
+import { WorkspaceContext } from "../services/WorkspaceContext.js";
 import { MessageService } from "./MessageService.js";
 import { createReadlineInterface, promptForInput } from "./ReadlineIO.js";
 import { handleSlashCommand, isSlashCommand } from "./SlashCommandHandler.js";
@@ -192,11 +193,12 @@ export const ChatProgram = Effect.gen(function* () {
 	const sessionStore = yield* SessionStore;
 	const configService = yield* ConfigService;
 	const toolRegistry = yield* ToolRegistry;
+	const workspace = yield* WorkspaceContext;
 
 	const config = yield* configService.load;
 	const toolNames = yield* toolRegistry.listToolNames;
 	const session = yield* sessionStore.createSession(
-		process.cwd(),
+		workspace.cwd,
 		"Cliq Session",
 	);
 

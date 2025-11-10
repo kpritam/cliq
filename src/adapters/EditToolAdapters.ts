@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import type * as ManagedRuntime from "effect/ManagedRuntime";
 import { z } from "zod";
 import { EditTools } from "../tools/EditTools.js";
+import { runToolEffect } from "./runtime.js";
 
 export const makeEditToolsForVercel = (
 	runtime: ManagedRuntime.ManagedRuntime<EditTools, never>,
@@ -46,7 +47,8 @@ export const makeEditToolsForVercel = (
 			preview?: boolean;
 			force?: boolean;
 		}) =>
-			runtime.runPromise(
+			runToolEffect(
+				runtime,
 				Effect.flatMap(EditTools, (service) =>
 					service.editFile({
 						filePath,
@@ -83,7 +85,8 @@ export const makeEditToolsForVercel = (
 			newString: string;
 			replaceAll?: boolean;
 		}) =>
-			runtime.runPromise(
+			runToolEffect(
+				runtime,
 				Effect.flatMap(EditTools, (service) =>
 					service.previewEdit({ filePath, oldString, newString, replaceAll }),
 				),

@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import type * as ManagedRuntime from "effect/ManagedRuntime";
 import { z } from "zod";
 import { SearchTools } from "../tools/SearchTools.js";
+import { runToolEffect } from "./runtime.js";
 
 export const makeSearchToolsForVercel = (
 	runtime: ManagedRuntime.ManagedRuntime<SearchTools, never>,
@@ -47,7 +48,8 @@ export const makeSearchToolsForVercel = (
 			onlyFiles?: boolean;
 			maxResults?: number;
 		}) =>
-			runtime.runPromise(
+			runToolEffect(
+				runtime,
 				Effect.flatMap(SearchTools, (service) =>
 					service.glob({
 						pattern,
@@ -107,7 +109,8 @@ export const makeSearchToolsForVercel = (
 			maxResults?: number;
 			searchPath?: string;
 		}) =>
-			runtime.runPromise(
+			runToolEffect(
+				runtime,
 				Effect.flatMap(SearchTools, (service) =>
 					service.grep({
 						pattern,

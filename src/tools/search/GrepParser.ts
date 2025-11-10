@@ -28,8 +28,9 @@ export const getFileState = (
 	filePath: string,
 	path: Path.Path,
 	cwd: string,
+	workspaceRoot: string,
 ): { key: string; state: GrepFileState } => {
-	const key = path.relative(process.cwd(), path.resolve(cwd, filePath));
+	const key = path.relative(workspaceRoot, path.resolve(cwd, filePath));
 	let state = states.get(key);
 	if (!state) {
 		state = createGrepFileState();
@@ -90,6 +91,7 @@ export const parseGrepOutput = (
 	path: Path.Path,
 	cwd: string,
 	contextLines: number,
+	workspaceRoot: string,
 ): { matches: GrepMatch[]; filesSearched: number } => {
 	const lines = output.trim().length > 0 ? output.trim().split("\n") : [];
 	const fileState = new Map<string, GrepFileState>();
@@ -110,6 +112,7 @@ export const parseGrepOutput = (
 				parsed.data.path.text,
 				path,
 				cwd,
+				workspaceRoot,
 			);
 			const ctxLine = parsed.data.lines.text.trimEnd();
 			processContextLine(state, ctxLine, contextLines);
@@ -122,6 +125,7 @@ export const parseGrepOutput = (
 				parsed.data.path.text,
 				path,
 				cwd,
+				workspaceRoot,
 			);
 			processMatchLine(
 				state,

@@ -4,10 +4,6 @@ export class FileAccessDenied extends Data.TaggedError("FileAccessDenied")<{
 	readonly path: string;
 }> {}
 
-export class FileNotFound extends Data.TaggedError("FileNotFound")<{
-	readonly path: string;
-}> {}
-
 export class StringNotFound extends Data.TaggedError("StringNotFound")<{
 	readonly path: string;
 	readonly oldString: string;
@@ -22,12 +18,11 @@ export class CommandFailed extends Data.TaggedError("CommandFailed")<{
 	readonly message: string;
 }> {}
 
-export class FileReadFailed extends Data.TaggedError("FileReadFailed")<{
-	readonly path: string;
-	readonly message: string;
+export class SessionNotFound extends Data.TaggedError("SessionNotFound")<{
+	readonly sessionId: string;
 }> {}
 
-export class FileWriteFailed extends Data.TaggedError("FileWriteFailed")<{
-	readonly path: string;
-	readonly message: string;
+export class MessageNotFound extends Data.TaggedError("MessageNotFound")<{
+	readonly sessionId: string;
+	readonly messageId: string;
 }> {}

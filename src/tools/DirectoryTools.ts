@@ -50,12 +50,11 @@ export const layer = Layer.effect(
 					Effect.gen(function* () {
 						const child = path.resolve(resolved, name);
 						const info = yield* fs.stat(child);
+						const type: "directory" | "file" =
+							info.type === "Directory" ? "directory" : "file";
 						return {
 							name,
-							type:
-								info.type === "Directory"
-									? ("directory" as const)
-									: ("file" as const),
+							type,
 						};
 					}),
 				);

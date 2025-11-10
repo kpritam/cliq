@@ -5,6 +5,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { FileAccessDenied } from "../types/errors.js";
+import { WorkspaceContext } from "./WorkspaceContext.js";
 
 export class PathValidation extends Context.Tag("PathValidation")<
 	PathValidation,
@@ -22,10 +23,9 @@ export const layer = Layer.effect(
 	Effect.gen(function* () {
 		const fs = yield* FileSystem.FileSystem;
 		const path = yield* PathService.Path;
-		const cwd = process.cwd();
-		const cwdReal = yield* fs
-			.realPath(cwd)
-			.pipe(Effect.catchAll(() => Effect.succeed(cwd)));
+		const workspace = yield* WorkspaceContext;
+		const cwd = workspace.cwd;
+		const cwdReal = workspace.realCwd;
 
 		const resolvePath = (inputPath: string): string =>
 			path.resolve(cwd, inputPath);

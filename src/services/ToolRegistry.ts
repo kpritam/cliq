@@ -5,11 +5,19 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import { makeAllTools } from "../adapters/index.js";
-import { layer as DirectoryToolsLayer } from "../tools/DirectoryTools.js";
-import { layer as EditToolsLayer } from "../tools/EditTools.js";
-import { layer as FileToolsLayer } from "../tools/FileTools.js";
-import { layer as SearchToolsLayer } from "../tools/SearchTools.js";
+import {
+	type DirectoryTools,
+	layer as DirectoryToolsLayer,
+} from "../tools/DirectoryTools.js";
+import { type EditTools, layer as EditToolsLayer } from "../tools/EditTools.js";
+import { type FileTools, layer as FileToolsLayer } from "../tools/FileTools.js";
+import {
+	type SearchTools,
+	layer as SearchToolsLayer,
+} from "../tools/SearchTools.js";
+import { layer as GlobServiceLayer } from "./GlobService.js";
 import { layer as PathValidationLayer } from "./PathValidation.js";
+import { layer as WorkspaceContextLayer } from "./WorkspaceContext.js";
 
 export class ToolRegistry extends Context.Tag("ToolRegistry")<
 	ToolRegistry,
@@ -21,43 +29,39 @@ export class ToolRegistry extends Context.Tag("ToolRegistry")<
 
 export const layer = Layer.effect(
 	ToolRegistry,
-	Effect.sync(() => {
-		const pathValidationStack = PathValidationLayer.pipe(
-			Layer.provide(BunContext.layer),
+	Effect.gen(function* () {
+		const bunPlatformLayer = BunContext.layer;
+		const workspaceLayer = WorkspaceContextLayer.pipe(
+			Layer.provide(bunPlatformLayer),
+		);
+		const pathValidationLayer = PathValidationLayer.pipe(
+			Layer.provide(workspaceLayer),
+			Layer.provide(bunPlatformLayer),
 		);
 
-		// Create managed runtimes with full layer stacks for each tool service
+		const provideCoreDependencies = <A>(
+			serviceLayer: Layer.Layer<never, never, A>,
+		) =>
+			serviceLayer.pipe(
+				Layer.provide(pathValidationLayer),
+				Layer.provide(workspaceLayer),
+				Layer.provide(bunPlatformLayer),
+			);
+
 		const fileToolsRuntime = ManagedRuntime.make(
-			FileToolsLayer.pipe(
-				Layer.provide(pathValidationStack),
-				Layer.provide(BunContext.layer),
-				Layer.orDie,
-			),
-		);
-
+			provideCoreDependencies(FileToolsLayer).pipe(Layer.orDie),
+		) as ManagedRuntime.ManagedRuntime<FileTools, never>;
 		const searchToolsRuntime = ManagedRuntime.make(
-			SearchToolsLayer.pipe(
-				Layer.provide(pathValidationStack),
-				Layer.provide(BunContext.layer),
-				Layer.orDie,
-			),
-		);
-
+			provideCoreDependencies(SearchToolsLayer)
+				.pipe(Layer.provide(GlobServiceLayer))
+				.pipe(Layer.orDie),
+		) as ManagedRuntime.ManagedRuntime<SearchTools, never>;
 		const editToolsRuntime = ManagedRuntime.make(
-			EditToolsLayer.pipe(
-				Layer.provide(pathValidationStack),
-				Layer.provide(BunContext.layer),
-				Layer.orDie,
-			),
-		);
-
+			provideCoreDependencies(EditToolsLayer).pipe(Layer.orDie),
+		) as ManagedRuntime.ManagedRuntime<EditTools, never>;
 		const directoryToolsRuntime = ManagedRuntime.make(
-			DirectoryToolsLayer.pipe(
-				Layer.provide(pathValidationStack),
-				Layer.provide(BunContext.layer),
-				Layer.orDie,
-			),
-		);
+			provideCoreDependencies(DirectoryToolsLayer).pipe(Layer.orDie),
+		) as ManagedRuntime.ManagedRuntime<DirectoryTools, never>;
 
 		const toolsMap = makeAllTools(
 			fileToolsRuntime,

@@ -8,11 +8,14 @@ import type {
 } from "../../types/config.js";
 import type { EnvConfig } from "./EnvConfig.js";
 
+/**
+ * Default model to use for each provider when none is persisted or supplied via env.
+ */
 const DEFAULT_MODELS: Readonly<Record<Provider, string>> = {
 	google: "gemini-2.5-flash",
 	anthropic: "claude-haiku-4-5",
 	openai: "gpt-4o-mini",
-} as const;
+};
 
 interface BaseConfigParams {
 	readonly model: string;
@@ -64,6 +67,10 @@ const createGoogleConfig = (
 	apiKey: Option.getOrUndefined(apiKey),
 });
 
+/**
+ * Construct the effective configuration for the given provider and model.
+ * Values combine persisted settings with environment overrides.
+ */
 export const build = (
 	env: EnvConfig,
 	provider: Provider,
@@ -81,5 +88,8 @@ export const build = (
 	}
 };
 
+/**
+ * Determine which model to use for the given provider, falling back to defaults.
+ */
 export const resolveModel = (env: EnvConfig, provider: Provider): string =>
 	Option.getOrElse(env.aiModel, () => DEFAULT_MODELS[provider]);

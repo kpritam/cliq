@@ -12,6 +12,9 @@ export interface ProviderContext {
 	readonly googleApiKey: Option.Option<string>;
 }
 
+/**
+ * Determine the provider to use by inspecting explicit configuration and API keys.
+ */
 export const resolve = (context: ProviderContext): Provider => {
 	const explicitProvider = Option.flatMap(context.aiProvider, (p) => {
 		const lower = p.toLowerCase();

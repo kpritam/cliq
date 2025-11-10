@@ -68,10 +68,10 @@ export const layer = Layer.effect(
 
 		const setProvider = (provider: Provider, model: string) =>
 			Effect.gen(function* () {
-				yield* Effect.all([
-					Persistence.saveProvider(store, provider),
-					Persistence.saveModel(store, model),
-				]);
+				yield* Effect.all({
+					saveProvider: Persistence.saveProvider(store, provider),
+					saveModel: Persistence.saveModel(store, model),
+				});
 				const env = yield* EnvConfig.load;
 				const newConfig = ConfigBuilder.build(env, provider, model);
 				yield* Ref.set(configRef, newConfig);

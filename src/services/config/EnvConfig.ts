@@ -23,4 +23,7 @@ const envConfig = Config.all({
 	googleApiKey: Config.option(Config.string("GOOGLE_API_KEY")),
 }) satisfies Config.Config<EnvConfig>;
 
+/**
+ * Load configuration values from the environment using Effect's config API.
+ */
 export const load = envConfig;

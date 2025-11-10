@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import type * as ManagedRuntime from "effect/ManagedRuntime";
 import { z } from "zod";
 import { FileTools } from "../tools/FileTools.js";
+import { runToolEffect } from "./runtime.js";
 
 export const makeFileToolsForVercel = (
 	runtime: ManagedRuntime.ManagedRuntime<FileTools, never>,
@@ -13,7 +14,8 @@ export const makeFileToolsForVercel = (
 			filePath: z.string().describe("The path to the file to read"),
 		}),
 		execute: async ({ filePath }: { filePath: string }) =>
-			runtime.runPromise(
+			runToolEffect(
+				runtime,
 				Effect.flatMap(FileTools, (service) => service.readFile({ filePath })),
 			),
 	}),
@@ -31,7 +33,8 @@ export const makeFileToolsForVercel = (
 			filePath: string;
 			content: string;
 		}) =>
-			runtime.runPromise(
+			runToolEffect(
+				runtime,
 				Effect.flatMap(FileTools, (service) =>
 					service.writeFile({ filePath, content }),
 				),
@@ -44,7 +47,8 @@ export const makeFileToolsForVercel = (
 			filePath: z.string().describe("The path to check for existence"),
 		}),
 		execute: async ({ filePath }: { filePath: string }) =>
-			runtime.runPromise(
+			runToolEffect(
+				runtime,
 				Effect.flatMap(FileTools, (service) =>
 					service.fileExists({ filePath }),
 				),
@@ -68,7 +72,8 @@ export const makeFileToolsForVercel = (
 			filePath: string;
 			includeHtml?: boolean;
 		}) =>
-			runtime.runPromise(
+			runToolEffect(
+				runtime,
 				Effect.flatMap(FileTools, (service) =>
 					service.renderMarkdown({ filePath, includeHtml }),
 				),

@@ -3,6 +3,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import { CryptoHasher } from "../services/CryptoHasher.js";
+import { MessageNotFound, SessionNotFound } from "../types/errors.js";
 import type { Session, StoredMessage } from "../types/session.js";
 import { FileKeyValueStore } from "./FileKeyValueStore.js";
 
@@ -23,10 +25,13 @@ export interface SessionStoreService {
 	) => Effect.Effect<void, PlatformError.PlatformError>;
 	readonly listMessages: (
 		sessionID: string,
-	) => Effect.Effect<Array<StoredMessage>, PlatformError.PlatformError>;
+	) => Effect.Effect<
+		Array<StoredMessage>,
+		PlatformError.PlatformError | MessageNotFound
+	>;
 	readonly listSessions: Effect.Effect<
 		Array<Session>,
-		PlatformError.PlatformError
+		PlatformError.PlatformError | SessionNotFound
 	>;
 }
 
@@ -45,11 +50,11 @@ const serialize = <A>(value: A) => Effect.sync(() => JSON.stringify(value));
 const deserialize = <A>(input: string) =>
 	Effect.sync(() => JSON.parse(input) as A);
 
-const hashProject = (directory: string): string => {
-	const hasher = new Bun.CryptoHasher("sha256");
-	hasher.update(directory);
-	return hasher.digest("hex").slice(0, 16);
-};
+const expectOption = <A, E>(
+	option: Option.Option<A>,
+	onNone: () => E,
+): Effect.Effect<A, E> =>
+	Option.isSome(option) ? Effect.succeed(option.value) : Effect.fail(onNone());
 
 const messageNamespace = (sessionID: string) => `${MESSAGE_NS}/${sessionID}`;
 
@@ -57,6 +62,7 @@ export const layer = Layer.effect(
 	SessionStore,
 	Effect.gen(function* () {
 		const store = yield* FileKeyValueStore;
+		const cryptoHasher = yield* CryptoHasher;
 
 		const storeSession = (session: Session) =>
 			Effect.gen(function* () {
@@ -99,17 +105,23 @@ export const layer = Layer.effect(
 			});
 
 		const createSession = (directory: string, title: string) =>
-			Effect.all([timestamp(), generateID()]).pipe(
-				Effect.map(([now, id]) => ({
-					id,
-					projectID: hashProject(directory),
+			Effect.gen(function* () {
+				const { created, identifier } = yield* Effect.all({
+					created: timestamp(),
+					identifier: generateID(),
+				});
+				const hash = yield* cryptoHasher.sha256(directory);
+				const session: Session = {
+					id: identifier,
+					projectID: hash.slice(0, 16),
 					directory,
 					title,
 					version: "0.1.0",
-					time: { created: now, updated: now },
-				})),
-				Effect.tap(storeSession),
-			);
+					time: { created, updated: created },
+				};
+				yield* storeSession(session);
+				return session;
+			});
 
 		const getSession = (_projectID: string, sessionID: string) =>
 			loadSession(sessionID);
@@ -132,7 +144,14 @@ export const layer = Layer.effect(
 				const messages = yield* Effect.forEach(keys, (key) =>
 					Effect.gen(function* () {
 						const maybeMessage = yield* loadMessage(sessionID, key);
-						return Option.getOrThrow(maybeMessage);
+						return yield* expectOption(
+							maybeMessage,
+							() =>
+								new MessageNotFound({
+									sessionId: sessionID,
+									messageId: key,
+								}),
+						);
 					}),
 				);
 				// Sort messages by creation timestamp to maintain chronological order
@@ -144,7 +163,10 @@ export const layer = Layer.effect(
 			const sessions = yield* Effect.forEach(keys, (key) =>
 				Effect.gen(function* () {
 					const maybeSession = yield* loadSession(key);
-					return Option.getOrThrow(maybeSession);
+					return yield* expectOption(
+						maybeSession,
+						() => new SessionNotFound({ sessionId: key }),
+					);
 				}),
 			);
 			return sessions;

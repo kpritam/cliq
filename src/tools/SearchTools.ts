@@ -6,9 +6,14 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { GlobService } from "../services/GlobService.js";
 import { PathValidation } from "../services/PathValidation.js";
-import type { FileAccessDenied } from "../types/errors.js";
-import { CommandFailed, EmptyPattern } from "../types/errors.js";
+import { WorkspaceContext } from "../services/WorkspaceContext.js";
+import {
+	CommandFailed,
+	EmptyPattern,
+	FileAccessDenied,
+} from "../types/errors.js";
 import { parseGrepOutput } from "./search/GrepParser.js";
 
 const DEFAULT_EXCLUDES = [
@@ -17,7 +22,7 @@ const DEFAULT_EXCLUDES = [
 	"dist/**",
 	"build/**",
 	"*.log",
-] as const;
+];
 
 const GlobParameters = Schema.Struct({
 	pattern: Schema.String,
@@ -123,6 +128,8 @@ export const layer = Layer.effect(
 		const path = yield* Path.Path;
 		const executor = yield* CommandExecutor.CommandExecutor;
 		const pathValidation = yield* PathValidation;
+		const globService = yield* GlobService;
+		const workspace = yield* WorkspaceContext;
 
 		const runRgString = (args: readonly string[], cwd: string) =>
 			Command.make("rg", ...args).pipe(
@@ -141,33 +148,32 @@ export const layer = Layer.effect(
 		}: Schema.Schema.Type<typeof GlobParameters>) =>
 			Effect.gen(function* () {
 				const workingDir = yield* pathValidation.ensureWithinCwd(cwd ?? ".");
-				const glob = new Bun.Glob(pattern);
-				const iterator = glob.scan({
-					cwd: workingDir,
-					dot,
-					absolute,
-					onlyFiles,
-					followSymlinks: false,
-					throwErrorOnBrokenSymlink: false,
-				});
-
-				const matches: string[] = [];
-				yield* Effect.promise(async () => {
-					for await (const val of iterator) {
-						matches.push(val as string);
-						if (matches.length >= maxResults) break;
-					}
-				});
-
-				matches.sort();
+				const matches = yield* globService
+					.scan({
+						pattern,
+						cwd: workingDir,
+						dot,
+						absolute,
+						onlyFiles,
+						maxResults,
+					})
+					.pipe(
+						Effect.mapError(
+							() =>
+								new FileAccessDenied({
+									path: pathValidation.relativePath(workingDir),
+								}),
+						),
+					);
+				const orderedMatches = [...matches].sort();
 
 				return {
 					pattern,
-					matches: matches as readonly string[],
-					count: matches.length,
+					matches: orderedMatches,
+					count: orderedMatches.length,
 					truncated: matches.length >= maxResults,
 					cwd: absolute ? workingDir : pathValidation.relativePath(workingDir),
-				} as const;
+				};
 			});
 
 		const grep = ({
@@ -214,6 +220,7 @@ export const layer = Layer.effect(
 					path,
 					cwd,
 					contextLines,
+					workspace.realCwd,
 				);
 
 				return {
@@ -222,7 +229,7 @@ export const layer = Layer.effect(
 					filesSearched,
 					matches,
 					truncated: matches.length >= maxResults,
-				} as const;
+				};
 			});
 
 		return {
