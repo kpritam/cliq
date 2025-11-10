@@ -2,6 +2,17 @@ import { themes as prismThemes } from 'prism-react-renderer'
 import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 
+const {
+  ALGOLIA_APP_ID,
+  ALGOLIA_API_KEY,
+  ALGOLIA_INDEX_NAME,
+  ENABLE_AI_SEARCH,
+} = process.env
+
+const algoliaConfigured = Boolean(
+  ALGOLIA_APP_ID && ALGOLIA_API_KEY && ALGOLIA_INDEX_NAME,
+)
+
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
@@ -16,6 +27,11 @@ const config: Config = {
 
   url: 'https://kpritam.github.io',
   baseUrl: '/cliq/',
+
+  customFields: {
+    aiSearchEnabled: ENABLE_AI_SEARCH === '1',
+    aiProvider: 'none',
+  },
 
   headTags: [
     {
@@ -104,6 +120,16 @@ const config: Config = {
     colorMode: {
       respectPrefersColorScheme: true,
     },
+    algolia: algoliaConfigured
+      ? {
+          appId: ALGOLIA_APP_ID,
+          apiKey: ALGOLIA_API_KEY,
+          indexName: ALGOLIA_INDEX_NAME,
+          contextualSearch: true,
+          insights: true,
+          searchPagePath: 'search',
+        }
+      : undefined,
     navbar: {
       logo: {
         alt: 'Cliq Logo',
