@@ -1,8 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react'
 import Link from '@docusaurus/Link'
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
-import Layout from '@theme/Layout'
 import Heading from '@theme/Heading'
+import Layout from '@theme/Layout'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 import styles from './index.module.css'
 
@@ -354,8 +353,6 @@ function CTASection() {
 }
 
 export default function Home(): ReactNode {
-  const { siteConfig } = useDocusaurusContext()
-
   return (
     <Layout
       title="Build Your Own CLI Coding Agent"

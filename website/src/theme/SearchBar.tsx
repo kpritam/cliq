@@ -1,8 +1,9 @@
-import React, { type ReactNode } from 'react'
-import SearchBar from '@theme-original/SearchBar'
+import type { WrapperProps } from '@docusaurus/types'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import type SearchBarType from '@theme/SearchBar'
-import type { WrapperProps } from '@docusaurus/types'
+// eslint-disable-next-line import/no-unresolved
+import SearchBar from '@theme-original/SearchBar'
+import React, { type ReactNode } from 'react'
 
 type Props = WrapperProps<typeof SearchBarType>
 

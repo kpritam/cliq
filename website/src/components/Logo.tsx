@@ -1,5 +1,5 @@
-import React from 'react'
 import { useColorMode } from '@docusaurus/theme-common'
+import React from 'react'
 
 export default function Logo() {
   const { colorMode } = useColorMode()

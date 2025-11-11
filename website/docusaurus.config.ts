@@ -1,6 +1,11 @@
 import { themes as prismThemes } from 'prism-react-renderer'
 import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
+import { config as dotenvConfig } from 'dotenv'
+import { resolve } from 'path'
+
+// Load .env file
+dotenvConfig({ path: resolve(process.cwd(), '.env') })
 
 const { ALGOLIA_APP_ID, ALGOLIA_API_KEY, ALGOLIA_INDEX_NAME, ENABLE_AI_SEARCH } = process.env
 
@@ -20,6 +25,7 @@ const config: Config = {
 
   url: 'https://kpritam.github.io',
   baseUrl: '/cliq/',
+  trailingSlash: true,
 
   customFields: {
     aiSearchEnabled: ENABLE_AI_SEARCH === '1',
@@ -122,14 +128,18 @@ const config: Config = {
     },
     algolia: algoliaConfigured
       ? {
-          appId: ALGOLIA_APP_ID,
-          apiKey: ALGOLIA_API_KEY,
-          indexName: ALGOLIA_INDEX_NAME,
+          appId: ALGOLIA_APP_ID!,
+          apiKey: ALGOLIA_API_KEY!,
+          indexName: ALGOLIA_INDEX_NAME!,
           contextualSearch: true,
           insights: true,
           searchPagePath: 'search',
         }
-      : undefined,
+      : {
+          appId: 'placeholder',
+          apiKey: 'placeholder',
+          indexName: 'placeholder',
+        },
     navbar: {
       logo: {
         alt: 'Cliq Logo',
@@ -159,6 +169,10 @@ const config: Config = {
           docId: 'reference/overview',
           position: 'left',
           label: 'Reference',
+        },
+        {
+          type: 'search',
+          position: 'right',
         },
         {
           href: 'https://github.com/kpritam/cliq',
