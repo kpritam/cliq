@@ -162,7 +162,7 @@ Now create the actual file reading tool:
 
 ```typescript title="src/tools/FileTools.ts"
 import { Effect, Layer, Context } from 'effect'
-import { Schema } from '@effect/schema'
+import * as Schema from 'effect/Schema'
 import * as FileSystem from '@effect/platform/FileSystem'
 import { PathValidation } from '../services/PathValidation'
 
@@ -251,9 +251,20 @@ The Vercel AI SDK needs tools in a specific format. Create an adapter:
 ```typescript title="src/adapters/FileToolAdapters.ts"
 import { tool } from 'ai'
 import * as Effect from 'effect/Effect'
+import * as Schema from 'effect/Schema'
 import type * as ManagedRuntime from 'effect/ManagedRuntime'
-import { z } from 'zod'
 import { FileTools } from '../tools/FileTools'
+import { runToolEffect } from './runtime'
+
+// Define the input schema for the tool
+const ReadFileParameters = Schema.Struct({
+  filePath: Schema.String.annotations({
+    description: 'The path to the file to read',
+  }),
+})
+
+// Wrap with Standard Schema V1 for AI SDK v6 compatibility
+const ReadFileToolSchema = Schema.standardSchemaV1(ReadFileParameters)
 
 export const makeFileToolsForVercel = (
   runtime: ManagedRuntime.ManagedRuntime<FileTools, never>,
@@ -261,11 +272,12 @@ export const makeFileToolsForVercel = (
   return {
     readFile: tool({
       description: 'Read the contents of a file from the project directory',
-      inputSchema: z.object({
-        filePath: z.string().describe('The path to the file to read'),
-      }),
+      inputSchema: ReadFileToolSchema,
       execute: async ({ filePath }: { filePath: string }) =>
-        runtime.runPromise(Effect.flatMap(FileTools, (tools) => tools.readFile({ filePath }))),
+        runToolEffect(
+          runtime,
+          Effect.flatMap(FileTools, (tools) => tools.readFile({ filePath })),
+        ),
     }),
   }
 }
@@ -274,8 +286,9 @@ export const makeFileToolsForVercel = (
 **What's happening here:**
 
 - `tool` is from the Vercel AI SDK—it defines a tool in the format AI providers expect
+- `ReadFileToolSchema` is a Standard Schema V1 wrapper created with `Schema.standardSchemaV1()` that makes Effect Schema compatible with AI SDK v6
 - The adapter uses `ManagedRuntime` to run the Effect-based tool
-- `runPromise` converts the Effect into a promise the AI SDK can use
+- `runToolEffect` is a helper that converts the Effect into a promise the AI SDK can use
 
 ### Step 5: Create the Tool Registry
 
@@ -285,7 +298,7 @@ Bring it all together in a registry:
 import { Effect, Layer, Context, ManagedRuntime } from 'effect'
 import { FileTools } from '../tools/FileTools'
 import { PathValidation } from './PathValidation'
-import { makeFileTools } from '../adapters/FileToolAdapters'
+import { makeFileToolsForVercel } from '../adapters/FileToolAdapters'
 import { BunContext } from '@effect/platform-bun'
 
 export class ToolRegistry extends Context.Tag('ToolRegistry')<
@@ -304,7 +317,7 @@ export const layer = Layer.effect(
     )
 
     // Create the tools map
-    const toolsMap = makeFileTools(fileToolsRuntime)
+    const toolsMap = makeFileToolsForVercel(fileToolsRuntime)
 
     return {
       tools: Effect.succeed(toolsMap),
@@ -455,7 +468,7 @@ await Effect.runPromise(
 ```typescript
 // Services initialize once, reuse for all calls
 const runtime = ManagedRuntime.make(allLayers)
-await runtime.runPromise(tool.readFile(params))
+await runToolEffect(runtime, tool.readFile(params))
 ```
 
 Think of it like a database connection pool—you set it up once and reuse it, rather than reconnecting every time.

@@ -1,7 +1,16 @@
 import { tool } from "ai";
 import * as Effect from "effect/Effect";
 import type * as ManagedRuntime from "effect/ManagedRuntime";
-import { z } from "zod";
+import {
+	type FileExistsInput,
+	FileExistsToolSchema,
+	type ReadFileInput,
+	ReadFileToolSchema,
+	type RenderMarkdownInput,
+	RenderMarkdownToolSchema,
+	type WriteFileInput,
+	WriteFileToolSchema,
+} from "../schemas/toolInputs.js";
 import { FileTools } from "../tools/FileTools.js";
 import { runToolEffect } from "./runtime.js";
 
@@ -10,10 +19,8 @@ export const makeFileToolsForVercel = (
 ) => ({
 	readFile: tool({
 		description: "Read the contents of a file",
-		inputSchema: z.object({
-			filePath: z.string().describe("The path to the file to read"),
-		}),
-		execute: async ({ filePath }: { filePath: string }) =>
+		inputSchema: ReadFileToolSchema,
+		execute: async ({ filePath }: ReadFileInput) =>
 			runToolEffect(
 				runtime,
 				Effect.flatMap(FileTools, (service) => service.readFile({ filePath })),
@@ -22,31 +29,20 @@ export const makeFileToolsForVercel = (
 
 	writeFile: tool({
 		description: "Write content to a file",
-		inputSchema: z.object({
-			filePath: z.string().describe("The path where to write the file"),
-			content: z.string().describe("The content to write to the file"),
-		}),
-		execute: async ({
-			filePath,
-			content,
-		}: {
-			filePath: string;
-			content: string;
-		}) =>
+		inputSchema: WriteFileToolSchema,
+		execute: async ({ filePath, content, includeDiff }: WriteFileInput) =>
 			runToolEffect(
 				runtime,
 				Effect.flatMap(FileTools, (service) =>
-					service.writeFile({ filePath, content }),
+					service.writeFile({ filePath, content, includeDiff }),
 				),
 			),
 	}),
 
 	fileExists: tool({
 		description: "Check if a file or directory exists",
-		inputSchema: z.object({
-			filePath: z.string().describe("The path to check for existence"),
-		}),
-		execute: async ({ filePath }: { filePath: string }) =>
+		inputSchema: FileExistsToolSchema,
+		execute: async ({ filePath }: FileExistsInput) =>
 			runToolEffect(
 				runtime,
 				Effect.flatMap(FileTools, (service) =>
@@ -58,20 +54,8 @@ export const makeFileToolsForVercel = (
 	renderMarkdown: tool({
 		description:
 			"Read and parse a markdown file, returning both raw content and parsed metadata",
-		inputSchema: z.object({
-			filePath: z.string().describe("The path to the markdown file to parse"),
-			includeHtml: z
-				.boolean()
-				.optional()
-				.describe("Include HTML rendering (default false)"),
-		}),
-		execute: async ({
-			filePath,
-			includeHtml,
-		}: {
-			filePath: string;
-			includeHtml?: boolean;
-		}) =>
+		inputSchema: RenderMarkdownToolSchema,
+		execute: async ({ filePath, includeHtml }: RenderMarkdownInput) =>
 			runToolEffect(
 				runtime,
 				Effect.flatMap(FileTools, (service) =>

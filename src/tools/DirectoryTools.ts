@@ -5,10 +5,9 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import type { ListDirectoryInput } from "../schemas/toolInputs.js";
 import { PathValidation } from "../services/PathValidation.js";
 import type { FileAccessDenied } from "../types/errors.js";
-
-const ListParameters = Schema.Struct({ path: Schema.String });
 
 const ListSuccess = Schema.Struct({
 	files: Schema.Array(
@@ -24,7 +23,7 @@ export class DirectoryTools extends Context.Tag("DirectoryTools")<
 	DirectoryTools,
 	{
 		readonly listDirectories: (
-			p: Schema.Schema.Type<typeof ListParameters>,
+			p: ListDirectoryInput,
 		) => Effect.Effect<
 			Schema.Schema.Type<typeof ListSuccess>,
 			Error | PlatformError.PlatformError | FileAccessDenied
@@ -39,9 +38,7 @@ export const layer = Layer.effect(
 		const path = yield* PathService.Path;
 		const pathValidation = yield* PathValidation;
 
-		const listDirectories = ({
-			path: dir,
-		}: Schema.Schema.Type<typeof ListParameters>) =>
+		const listDirectories = ({ path: dir }: ListDirectoryInput) =>
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(dir);
 				const names = yield* fs.readDirectory(resolved);

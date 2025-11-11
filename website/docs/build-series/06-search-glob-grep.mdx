@@ -46,6 +46,20 @@ Ripgrep’s `--json` flag produces machine-readable events. Pipe them through a 
 ### Step 1: Glob safely within the project root
 
 ```typescript title="src/tools/SearchTools.ts"
+import * as Schema from 'effect/Schema'
+import * as Effect from 'effect/Effect'
+import { PathValidation } from '../services/PathValidation'
+
+// Define the input schema
+const GlobParameters = Schema.Struct({
+  pattern: Schema.String,
+  cwd: Schema.optional(Schema.String),
+  dot: Schema.optional(Schema.Boolean),
+  absolute: Schema.optional(Schema.Boolean),
+  onlyFiles: Schema.optional(Schema.Boolean),
+  maxResults: Schema.optional(Schema.Number),
+})
+
 const glob = ({
   pattern,
   cwd,
@@ -127,6 +141,22 @@ const buildGrepArgs = (
 ### Step 3: Execute ripgrep through the command runtime
 
 ```typescript title="src/tools/SearchTools.ts"
+import * as Schema from 'effect/Schema'
+import * as Effect from 'effect/Effect'
+import { PathValidation } from '../services/PathValidation'
+import { EmptyPattern } from '../types/errors'
+
+// Define the input schema
+const GrepParameters = Schema.Struct({
+  pattern: Schema.String,
+  isRegex: Schema.optional(Schema.Boolean),
+  includePatterns: Schema.optional(Schema.Array(Schema.String)),
+  excludePatterns: Schema.optional(Schema.Array(Schema.String)),
+  contextLines: Schema.optional(Schema.Number),
+  maxResults: Schema.optional(Schema.Number),
+  searchPath: Schema.optional(Schema.String),
+})
+
 const grep = ({
   pattern,
   isRegex = false,

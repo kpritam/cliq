@@ -6,6 +6,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import type { GlobInput, GrepInput } from "../schemas/toolInputs.js";
 import { GlobService } from "../services/GlobService.js";
 import { PathValidation } from "../services/PathValidation.js";
 import { WorkspaceContext } from "../services/WorkspaceContext.js";
@@ -24,31 +25,12 @@ const DEFAULT_EXCLUDES = [
 	"*.log",
 ];
 
-const GlobParameters = Schema.Struct({
-	pattern: Schema.String,
-	cwd: Schema.optional(Schema.String),
-	dot: Schema.optional(Schema.Boolean),
-	absolute: Schema.optional(Schema.Boolean),
-	onlyFiles: Schema.optional(Schema.Boolean),
-	maxResults: Schema.optional(Schema.Number),
-});
-
 const GlobSuccess = Schema.Struct({
 	pattern: Schema.String,
 	matches: Schema.Array(Schema.String),
 	count: Schema.Number,
 	truncated: Schema.Boolean,
 	cwd: Schema.String,
-});
-
-const GrepParameters = Schema.Struct({
-	pattern: Schema.String,
-	isRegex: Schema.optional(Schema.Boolean),
-	includePatterns: Schema.optional(Schema.Array(Schema.String)),
-	excludePatterns: Schema.optional(Schema.Array(Schema.String)),
-	contextLines: Schema.optional(Schema.Number),
-	maxResults: Schema.optional(Schema.Number),
-	searchPath: Schema.optional(Schema.String),
 });
 
 const GrepMatch = Schema.Struct({
@@ -71,13 +53,13 @@ export class SearchTools extends Context.Tag("SearchTools")<
 	SearchTools,
 	{
 		readonly glob: (
-			params: Schema.Schema.Type<typeof GlobParameters>,
+			params: GlobInput,
 		) => Effect.Effect<
 			Schema.Schema.Type<typeof GlobSuccess>,
 			PlatformError.PlatformError | FileAccessDenied
 		>;
 		readonly grep: (
-			params: Schema.Schema.Type<typeof GrepParameters>,
+			params: GrepInput,
 		) => Effect.Effect<
 			Schema.Schema.Type<typeof GrepSuccess>,
 			| EmptyPattern
@@ -145,7 +127,7 @@ export const layer = Layer.effect(
 			absolute = false,
 			onlyFiles = true,
 			maxResults = 1000,
-		}: Schema.Schema.Type<typeof GlobParameters>) =>
+		}: GlobInput) =>
 			Effect.gen(function* () {
 				const workingDir = yield* pathValidation.ensureWithinCwd(cwd ?? ".");
 				const matches = yield* globService
@@ -184,7 +166,7 @@ export const layer = Layer.effect(
 			contextLines = 2,
 			maxResults = 100,
 			searchPath,
-		}: Schema.Schema.Type<typeof GrepParameters>) =>
+		}: GrepInput) =>
 			Effect.gen(function* () {
 				if (pattern.trim().length === 0) {
 					return yield* Effect.fail(new EmptyPattern({ pattern }));

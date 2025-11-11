@@ -48,13 +48,13 @@ Even custom tools should reuse `PathValidation`. If your tool reads or writes fi
 ```typescript title="src/tools/TodoScanTools.ts"
 import * as FileSystem from '@effect/platform/FileSystem'
 import * as Path from '@effect/platform/Path'
-import { Todo } from 'effect/Schema' // placeholder for other schemas you might export
 import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
 import * as Schema from 'effect/Schema'
 import { PathValidation } from '../services/PathValidation'
 
+// Define input and output schemas
 const Parameters = Schema.Struct({
   directory: Schema.optional(Schema.String),
 })
@@ -130,6 +130,24 @@ export const layer = Layer.effect(
 ### Step 2: Wire the adapter
 
 ```typescript title="src/adapters/index.ts"
+import { tool } from 'ai'
+import * as Effect from 'effect/Effect'
+import * as Schema from 'effect/Schema'
+import type * as ManagedRuntime from 'effect/ManagedRuntime'
+import { makeFileToolsForVercel } from './FileToolAdapters'
+import { makeSearchToolsForVercel } from './SearchToolAdapters'
+import { makeEditToolsForVercel } from './EditToolAdapters'
+import { makeDirectoryToolsForVercel } from './DirectoryToolAdapters'
+import { runToolEffect } from './runtime'
+
+// Define schema for the custom tool
+const TodoScanParameters = Schema.Struct({
+  directory: Schema.optional(Schema.String),
+})
+
+// Wrap with Standard Schema V1 for AI SDK v6 compatibility
+const TodoScanToolSchema = Schema.standardSchemaV1(TodoScanParameters)
+
 export const makeAllTools = (
   fileToolsRuntime: ManagedRuntime.ManagedRuntime<typeof FileTools>,
   searchToolsRuntime: ManagedRuntime.ManagedRuntime<typeof SearchTools>,
@@ -137,19 +155,23 @@ export const makeAllTools = (
   directoryToolsRuntime: ManagedRuntime.ManagedRuntime<typeof DirectoryTools>,
   todoToolsRuntime: ManagedRuntime.ManagedRuntime<typeof TodoScanTools>,
 ): ToolSet => ({
-  // ...existing tool adapters...
+  ...makeFileToolsForVercel(fileToolsRuntime),
+  ...makeSearchToolsForVercel(searchToolsRuntime),
+  ...makeEditToolsForVercel(editToolsRuntime),
+  ...makeDirectoryToolsForVercel(directoryToolsRuntime),
   todoScan: tool({
     description: 'Scan a directory for TODO comments',
-    inputSchema: z.object({
-      directory: z.string().optional(),
-    }),
-    execute: (input) =>
-      todoToolsRuntime.runPromise(Effect.flatMap(TodoScanTools, (tools) => tools.todoScan(input))),
+    inputSchema: TodoScanToolSchema,
+    execute: async (input: { directory?: string }) =>
+      runToolEffect(
+        todoToolsRuntime,
+        Effect.flatMap(TodoScanTools, (tools) => tools.todoScan(input)),
+      ),
   }),
 })
 ```
 
-Adapters validate parameters with `zod` and execute the Effect inside the managed runtime.
+Adapters validate parameters with `@effect/schema` and execute the Effect inside the managed runtime. Note that `Schema.standardSchemaV1()` wraps the Effect Schema to make it compatible with AI SDK v6's flexible schema system.
 
 ### Step 3: Register the runtime in ToolRegistry
 

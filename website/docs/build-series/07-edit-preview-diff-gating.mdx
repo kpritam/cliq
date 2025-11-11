@@ -75,9 +75,25 @@ const validateEdit = (original: string, updated: string) => {
 ### Step 2: Return a preview recommendation
 
 ```typescript title="src/tools/EditTools.ts"
+import * as Schema from 'effect/Schema'
+import * as Effect from 'effect/Effect'
+import * as FileSystem from '@effect/platform/FileSystem'
+import { PathValidation } from '../services/PathValidation'
+import { computeDiff } from '../utils/diff'
+
+// Define the input schema
+const PreviewParameters = Schema.Struct({
+  filePath: Schema.String,
+  oldString: Schema.String,
+  newString: Schema.String,
+  replaceAll: Schema.optional(Schema.Boolean),
+})
+
 const previewEdit = (params: Schema.Schema.Type<typeof PreviewParameters>) =>
   Effect.gen(function* () {
     const { filePath, oldString, newString, replaceAll = false } = params
+    const fs = yield* FileSystem.FileSystem
+    const pathValidation = yield* PathValidation
     const resolved = yield* pathValidation.ensureWithinCwd(filePath)
     const content = yield* fs.readFileString(resolved)
     const updated = yield* applyReplacement(content, oldString, newString, replaceAll, filePath)
@@ -101,10 +117,27 @@ const previewEdit = (params: Schema.Schema.Type<typeof PreviewParameters>) =>
 ### Step 3: Gate writes based on preview + validation
 
 ```typescript title="src/tools/EditTools.ts"
+import * as Schema from 'effect/Schema'
+import * as Effect from 'effect/Effect'
+import * as FileSystem from '@effect/platform/FileSystem'
+import { PathValidation } from '../services/PathValidation'
+import { computeDiff } from '../utils/diff'
+
+// Define the input schema
+const EditParameters = Schema.Struct({
+  filePath: Schema.String,
+  oldString: Schema.String,
+  newString: Schema.String,
+  replaceAll: Schema.optional(Schema.Boolean),
+  preview: Schema.optional(Schema.Boolean),
+  force: Schema.optional(Schema.Boolean),
+})
+
 const editFile = (params: Schema.Schema.Type<typeof EditParameters>) =>
   Effect.gen(function* () {
     const { filePath, oldString, newString, replaceAll = false, preview, force } = params
-
+    const fs = yield* FileSystem.FileSystem
+    const pathValidation = yield* PathValidation
     const resolved = yield* pathValidation.ensureWithinCwd(filePath)
     const content = yield* fs.readFileString(resolved)
     const updated = yield* applyReplacement(content, oldString, newString, replaceAll, filePath)
@@ -146,30 +179,68 @@ const editFile = (params: Schema.Schema.Type<typeof EditParameters>) =>
 When adapting the tool for Vercel AI, surface `recommendation`, `warnings`, and `errors` so the model can react:
 
 ```typescript title="src/adapters/EditToolAdapters.ts"
-previewEdit: tool({
-  description: 'Preview an edit and return diff + validation',
-  inputSchema: z.object({
-    filePath: z.string(),
-    oldString: z.string(),
-    newString: z.string(),
-    replaceAll: z.boolean().optional(),
-  }),
-  execute: (input) =>
-    runtime.runPromise(Effect.flatMap(EditTools, (tools) => tools.previewEdit(input))),
+import { tool } from 'ai'
+import * as Effect from 'effect/Effect'
+import * as Schema from 'effect/Schema'
+import type * as ManagedRuntime from 'effect/ManagedRuntime'
+import { EditTools } from '../tools/EditTools'
+import { runToolEffect } from './runtime'
+
+// Define schemas for preview and edit operations
+const PreviewParameters = Schema.Struct({
+  filePath: Schema.String,
+  oldString: Schema.String,
+  newString: Schema.String,
+  replaceAll: Schema.optional(Schema.Boolean),
 })
 
-editFile: tool({
-  description: 'Apply an edit with gating and diff stats',
-  inputSchema: z.object({
-    filePath: z.string(),
-    oldString: z.string(),
-    newString: z.string(),
-    replaceAll: z.boolean().optional(),
-    preview: z.boolean().optional(),
-    force: z.boolean().optional(),
+const EditParameters = Schema.Struct({
+  filePath: Schema.String,
+  oldString: Schema.String,
+  newString: Schema.String,
+  replaceAll: Schema.optional(Schema.Boolean),
+  preview: Schema.optional(Schema.Boolean),
+  force: Schema.optional(Schema.Boolean),
+})
+
+// Wrap with Standard Schema V1 for AI SDK v6 compatibility
+const PreviewToolSchema = Schema.standardSchemaV1(PreviewParameters)
+const EditToolSchema = Schema.standardSchemaV1(EditParameters)
+
+export const makeEditToolsForVercel = (
+  runtime: ManagedRuntime.ManagedRuntime<EditTools, never>,
+) => ({
+  previewEdit: tool({
+    description: 'Preview an edit and return diff + validation',
+    inputSchema: PreviewToolSchema,
+    execute: async (input: {
+      filePath: string
+      oldString: string
+      newString: string
+      replaceAll?: boolean
+    }) =>
+      runToolEffect(
+        runtime,
+        Effect.flatMap(EditTools, (tools) => tools.previewEdit(input)),
+      ),
   }),
-  execute: (input) =>
-    runtime.runPromise(Effect.flatMap(EditTools, (tools) => tools.editFile(input))),
+
+  editFile: tool({
+    description: 'Apply an edit with gating and diff stats',
+    inputSchema: EditToolSchema,
+    execute: async (input: {
+      filePath: string
+      oldString: string
+      newString: string
+      replaceAll?: boolean
+      preview?: boolean
+      force?: boolean
+    }) =>
+      runToolEffect(
+        runtime,
+        Effect.flatMap(EditTools, (tools) => tools.editFile(input)),
+      ),
+  }),
 })
 ```
 

@@ -3,6 +3,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import type { EditInput, PreviewInput } from "../schemas/toolInputs.js";
 import {
 	DiffStats as DiffStatsSchema,
 	Validation as ValidationSchema,
@@ -10,16 +11,6 @@ import {
 import { PathValidation } from "../services/PathValidation.js";
 import { type FileAccessDenied, StringNotFound } from "../types/errors.js";
 import { computeDiff, computeStats } from "../utils/diff.js";
-
-const EditParameters = Schema.Struct({
-	filePath: Schema.String,
-	oldString: Schema.String,
-	newString: Schema.String,
-	replaceAll: Schema.optional(Schema.Boolean),
-	preview: Schema.optional(Schema.Boolean),
-	force: Schema.optional(Schema.Boolean),
-	includeDiff: Schema.optional(Schema.Boolean),
-});
 
 const Validation = ValidationSchema;
 
@@ -34,13 +25,6 @@ const EditSuccess = Schema.Struct({
 	preview: Schema.optional(Schema.String),
 });
 
-const PreviewParameters = Schema.Struct({
-	filePath: Schema.String,
-	oldString: Schema.String,
-	newString: Schema.String,
-	replaceAll: Schema.optional(Schema.Boolean),
-});
-
 const PreviewSuccess = Schema.Struct({
 	path: Schema.String,
 	diff: Schema.String,
@@ -52,13 +36,13 @@ export class EditTools extends Context.Tag("EditTools")<
 	EditTools,
 	{
 		readonly editFile: (
-			params: Schema.Schema.Type<typeof EditParameters>,
+			params: EditInput,
 		) => Effect.Effect<
 			Schema.Schema.Type<typeof EditSuccess>,
 			StringNotFound | FileAccessDenied | Error
 		>;
 		readonly previewEdit: (
-			params: Schema.Schema.Type<typeof PreviewParameters>,
+			params: PreviewInput,
 		) => Effect.Effect<
 			Schema.Schema.Type<typeof PreviewSuccess>,
 			StringNotFound | FileAccessDenied | Error
@@ -122,7 +106,7 @@ export const layer = Layer.effect(
 			oldString,
 			newString,
 			replaceAll = false,
-		}: Schema.Schema.Type<typeof PreviewParameters>) =>
+		}: PreviewInput) =>
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
 				const content = yield* fs.readFileString(resolved);
@@ -161,7 +145,7 @@ export const layer = Layer.effect(
 			preview,
 			force,
 			includeDiff = true,
-		}: Schema.Schema.Type<typeof EditParameters>) =>
+		}: EditInput) =>
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
 				const content = yield* fs.readFileString(resolved);

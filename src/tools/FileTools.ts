@@ -4,6 +4,12 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import type {
+	FileExistsInput,
+	ReadFileInput,
+	RenderMarkdownInput,
+	WriteFileInput,
+} from "../schemas/toolInputs.js";
 import { DiffStats, MarkdownMetadata } from "../schemas/tools.js";
 import { PathValidation } from "../services/PathValidation.js";
 import type { FileAccessDenied } from "../types/errors.js";
@@ -14,25 +20,25 @@ export class FileTools extends Context.Tag("FileTools")<
 	FileTools,
 	{
 		readonly readFile: (
-			params: Schema.Schema.Type<typeof ReadFileParameters>,
+			params: ReadFileInput,
 		) => Effect.Effect<
 			Schema.Schema.Type<typeof ReadFileSuccess>,
 			Error | PlatformError.PlatformError | FileAccessDenied
 		>;
 		readonly writeFile: (
-			params: Schema.Schema.Type<typeof WriteFileParameters>,
+			params: WriteFileInput,
 		) => Effect.Effect<
 			Schema.Schema.Type<typeof WriteFileSuccess>,
 			Error | PlatformError.PlatformError | FileAccessDenied
 		>;
 		readonly fileExists: (
-			params: Schema.Schema.Type<typeof FileExistsParameters>,
+			params: FileExistsInput,
 		) => Effect.Effect<
 			Schema.Schema.Type<typeof FileExistsSuccess>,
 			Error | FileAccessDenied
 		>;
 		readonly renderMarkdown: (
-			params: Schema.Schema.Type<typeof RenderMarkdownParameters>,
+			params: RenderMarkdownInput,
 		) => Effect.Effect<
 			Schema.Schema.Type<typeof RenderMarkdownSuccess>,
 			Error | PlatformError.PlatformError | FileAccessDenied
@@ -41,15 +47,9 @@ export class FileTools extends Context.Tag("FileTools")<
 >() {}
 
 // Schemas
-const ReadFileParameters = Schema.Struct({ filePath: Schema.String });
 const ReadFileSuccess = Schema.Struct({
 	filePath: Schema.String,
 	content: Schema.String,
-});
-const WriteFileParameters = Schema.Struct({
-	filePath: Schema.String,
-	content: Schema.String,
-	includeDiff: Schema.optional(Schema.Boolean),
 });
 const WriteFileSuccess = Schema.Struct({
 	filePath: Schema.String,
@@ -58,15 +58,10 @@ const WriteFileSuccess = Schema.Struct({
 	diff: Schema.optional(Schema.String),
 	stats: Schema.optional(DiffStats),
 });
-const FileExistsParameters = Schema.Struct({ filePath: Schema.String });
 const FileExistsSuccess = Schema.Struct({
 	filePath: Schema.String,
 	exists: Schema.Boolean,
 	type: Schema.optional(Schema.Literal("file", "directory", "other")),
-});
-const RenderMarkdownParameters = Schema.Struct({
-	filePath: Schema.String,
-	includeHtml: Schema.optional(Schema.Boolean),
 });
 const RenderMarkdownSuccess = Schema.Struct({
 	filePath: Schema.String,
@@ -106,9 +101,7 @@ export const layer = Layer.effect(
 		const fs = yield* FileSystem.FileSystem;
 		const pathValidation = yield* PathValidation;
 
-		const readFile = ({
-			filePath,
-		}: Schema.Schema.Type<typeof ReadFileParameters>) =>
+		const readFile = ({ filePath }: ReadFileInput) =>
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
 				const content = yield* fs.readFileString(resolved);
@@ -119,7 +112,7 @@ export const layer = Layer.effect(
 			filePath,
 			content,
 			includeDiff = true,
-		}: Schema.Schema.Type<typeof WriteFileParameters>) =>
+		}: WriteFileInput) =>
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
 				const relPath = pathValidation.relativePath(resolved);
@@ -148,9 +141,7 @@ export const layer = Layer.effect(
 				};
 			});
 
-		const fileExists = ({
-			filePath,
-		}: Schema.Schema.Type<typeof FileExistsParameters>) =>
+		const fileExists = ({ filePath }: FileExistsInput) =>
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
 				const relPath = pathValidation.relativePath(resolved);
@@ -165,10 +156,7 @@ export const layer = Layer.effect(
 				};
 			});
 
-		const renderMarkdown = ({
-			filePath,
-			includeHtml,
-		}: Schema.Schema.Type<typeof RenderMarkdownParameters>) =>
+		const renderMarkdown = ({ filePath, includeHtml }: RenderMarkdownInput) =>
 			Effect.gen(function* () {
 				const resolved = yield* pathValidation.ensureWithinCwd(filePath);
 				const relPath = pathValidation.relativePath(resolved);

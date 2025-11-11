@@ -2,16 +2,9 @@ import { themes as prismThemes } from 'prism-react-renderer'
 import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 
-const {
-  ALGOLIA_APP_ID,
-  ALGOLIA_API_KEY,
-  ALGOLIA_INDEX_NAME,
-  ENABLE_AI_SEARCH,
-} = process.env
+const { ALGOLIA_APP_ID, ALGOLIA_API_KEY, ALGOLIA_INDEX_NAME, ENABLE_AI_SEARCH } = process.env
 
-const algoliaConfigured = Boolean(
-  ALGOLIA_APP_ID && ALGOLIA_API_KEY && ALGOLIA_INDEX_NAME,
-)
+const algoliaConfigured = Boolean(ALGOLIA_APP_ID && ALGOLIA_API_KEY && ALGOLIA_INDEX_NAME)
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -76,6 +69,13 @@ const config: Config = {
         name: 'twitter:description',
         content:
           'Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS.',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        name: 'algolia-site-verification',
+        content: '2B7BEC80443E78E5',
       },
     },
   ],

@@ -79,18 +79,14 @@ export const makeAllTools = (
   editToolsRuntime: ManagedRuntime.ManagedRuntime<typeof EditTools>,
   directoryToolsRuntime: ManagedRuntime.ManagedRuntime<typeof DirectoryTools>,
 ): ToolSet => ({
-  readFile: makeFileRead(fileToolsRuntime),
-  writeFile: makeFileWrite(fileToolsRuntime),
-  glob: makeSearchGlob(searchToolsRuntime),
-  grep: makeSearchGrep(searchToolsRuntime),
-  editFile: makeEditFile(editToolsRuntime),
-  previewEdit: makePreviewEdit(editToolsRuntime),
-  listDirectories: makeListDirectories(directoryToolsRuntime),
+  ...makeFileToolsForVercel(fileToolsRuntime),
+  ...makeSearchToolsForVercel(searchToolsRuntime),
+  ...makeEditToolsForVercel(editToolsRuntime),
+  ...makeDirectoryToolsForVercel(directoryToolsRuntime),
 })
 ```
 
-- Each adapter validates parameters with `@effect/schema`.
-- Each adapter validates parameters with `zod`.
+- Each adapter validates parameters with shared `@effect/schema` structs wrapped with `Schema.standardSchemaV1()` for AI SDK v6 compatibility.
 - The handler runs inside the managed runtime to access the correct services.
 - Results are serialised to JSON automatically for the Vercel AI SDK.
 
