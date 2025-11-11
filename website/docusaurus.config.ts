@@ -217,7 +217,7 @@ const config: Config = {
           appId: ALGOLIA_APP_ID!,
           apiKey: ALGOLIA_API_KEY!,
           indexName: ALGOLIA_INDEX_NAME!,
-          contextualSearch: true,
+          contextualSearch: false,
           insights: true,
           searchPagePath: 'search',
         }
