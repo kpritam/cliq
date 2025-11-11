@@ -1,3 +1,4 @@
+import Head from '@docusaurus/Head'
 import Link from '@docusaurus/Link'
 import Heading from '@theme/Heading'
 import Layout from '@theme/Layout'
@@ -353,11 +354,70 @@ function CTASection() {
 }
 
 export default function Home(): ReactNode {
+  const organizationSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Cliq',
+    url: 'https://kpritam.github.io/cliq/',
+    logo: 'https://kpritam.github.io/cliq/img/logo.svg',
+    description:
+      'Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS.',
+    sameAs: ['https://github.com/kpritam/cliq'],
+  }
+
+  const websiteSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Cliq',
+    url: 'https://kpritam.github.io/cliq/',
+    description:
+      'Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS. Step-by-step tutorials with hands-on exercises.',
+    publisher: {
+      '@type': 'Organization',
+      name: 'Cliq Contributors',
+    },
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: 'https://kpritam.github.io/cliq/search/?q={search_term_string}',
+      },
+      'query-input': 'required name=search_term_string',
+    },
+  }
+
+  const courseSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Course',
+    name: 'Build Your Own CLI Coding Agent',
+    description:
+      'A comprehensive tutorial series for building an Effect-TS powered CLI agent with type-safe tool execution and streaming responses.',
+    provider: {
+      '@type': 'Organization',
+      name: 'Cliq',
+      url: 'https://kpritam.github.io/cliq/',
+    },
+    courseCode: 'CLIQ-101',
+    educationalLevel: 'Intermediate',
+    teaches: [
+      'Effect-TS functional programming',
+      'CLI agent development',
+      'AI tool integration',
+      'TypeScript type safety',
+      'Vercel AI SDK',
+    ],
+  }
+
   return (
     <Layout
       title="Build Your Own CLI Coding Agent"
       description="Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS. Step-by-step tutorials with hands-on exercises."
     >
+      <Head>
+        <script type="application/ld+json">{JSON.stringify(organizationSchema)}</script>
+        <script type="application/ld+json">{JSON.stringify(websiteSchema)}</script>
+        <script type="application/ld+json">{JSON.stringify(courseSchema)}</script>
+      </Head>
       <HomepageHeader />
       <main>
         <WhatYoullLearn />

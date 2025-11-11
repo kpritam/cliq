@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://kpritam.github.io/cliq/sitemap.xml
+

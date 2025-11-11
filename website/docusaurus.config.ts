@@ -36,6 +36,29 @@ const config: Config = {
     {
       tagName: 'meta',
       attributes: {
+        name: 'description',
+        content:
+          'Learn to build a Claude-style CLI coding agent from scratch using TypeScript and Effect-TS. Step-by-step tutorials with hands-on exercises.',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        name: 'keywords',
+        content:
+          'CLI agent, AI coding assistant, Effect-TS, TypeScript, Vercel AI SDK, Bun, functional programming, AI tools, coding tutorial, terminal agent',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        name: 'author',
+        content: 'Cliq Contributors',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
         property: 'og:title',
         content: 'Build Your Own CLI Coding Agent | Cliq',
       },
@@ -53,6 +76,41 @@ const config: Config = {
       attributes: {
         property: 'og:type',
         content: 'website',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        property: 'og:url',
+        content: 'https://kpritam.github.io/cliq/',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        property: 'og:site_name',
+        content: 'Cliq',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        property: 'og:image',
+        content: 'https://kpritam.github.io/cliq/img/logo.svg',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        property: 'og:image:alt',
+        content: 'Cliq - Build Your Own CLI Coding Agent',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        property: 'og:locale',
+        content: 'en_US',
       },
     },
     {
@@ -80,8 +138,29 @@ const config: Config = {
     {
       tagName: 'meta',
       attributes: {
+        name: 'twitter:image',
+        content: 'https://kpritam.github.io/cliq/img/logo.svg',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
+        name: 'twitter:image:alt',
+        content: 'Cliq - Build Your Own CLI Coding Agent',
+      },
+    },
+    {
+      tagName: 'meta',
+      attributes: {
         name: 'algolia-site-verification',
         content: '2B7BEC80443E78E5',
+      },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'canonical',
+        href: 'https://kpritam.github.io/cliq/',
       },
     },
   ],
@@ -122,6 +201,13 @@ const config: Config = {
   ],
 
   themeConfig: {
+    metadata: [
+      {
+        name: 'keywords',
+        content:
+          'CLI agent, AI coding assistant, Effect-TS, TypeScript, Vercel AI SDK, Bun, functional programming, AI tools, coding tutorial, terminal agent',
+      },
+    ],
     image: 'img/logo.svg',
     colorMode: {
       respectPrefersColorScheme: true,
